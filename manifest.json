@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "frameworks": {
+    "claude":    { "skills_src": "skills", "skills_dst": "~/.agents/skills",         "shared_target": true },
+    "copilot":   { "skills_src": "skills", "skills_dst": "~/.agents/skills",         "shared_target": true, "_note": "inherits via symlink to ~/.agents/skills" },
+    "qoder":     { "skills_src": "skills", "skills_dst": "~/.agents/skills",         "shared_target": true, "_note": "inherits via symlink to ~/.agents/skills" },
+    "codex":     { "skills_src": "skills", "skills_dst": "~/.codex/skills/.system",  "shared_target": false },
+    "mimo":      { "skills_src": "skills", "skills_dst": "~/.local/share/mimocode/builtin_skills/0.1.3/skills", "shared_target": false },
+    "gemini":    { "skills_src": "skills", "skills_dst": "~/.gemini/skills",         "shared_target": false, "skip_if_empty": true, "_note": "no user-skill loader at 0.47.0; stage only" },
+    "codewhale": { "skills_src": "skills", "skills_dst": "~/.codewhale/skills",      "shared_target": false },
+    "moltbot":   { "skip": true, "reason": "no skill system at v0.1.0" }
+  },
+  "plugins": {
+    "claude":  { "src": "plugins/claude",  "dst": "~/.claude/plugins/marketplaces" },
+    "copilot": { "src": "plugins/copilot", "dst": "%LOCALAPPDATA%/copilot/marketplaces" }
+  }
+}

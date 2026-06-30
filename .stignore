@@ -1,0 +1,8 @@
+(?d).git/
+(?i)install.log
+(?i)*.tmp
+(?i)*.bak
+(?i)Thumbs.db
+(?i)desktop.ini
+(?i).DS_Store
+(?d).stignore.syncthing*
