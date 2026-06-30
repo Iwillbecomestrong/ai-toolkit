@@ -4,6 +4,8 @@ install.log
 *.swp
 .stignore.syncthing*
 .syncthing.*
+.stfolder/                       # syncthing folder marker (dir + marker file inside)
+.stfolder/**
 Thumbs.db
 desktop.ini
 .DS_Store
