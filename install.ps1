@@ -17,8 +17,19 @@
 
 [CmdletBinding()]
 param(
-    [string]$RepoRoot = $PSScriptRoot
+    [string]$RepoRoot
 )
+
+# When invoked via -File, $PSScriptRoot can be empty; fall back to script path
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    if ($PSScriptRoot) {
+        $RepoRoot = $PSScriptRoot
+    } elseif ($MyInvocation.MyCommand.Path) {
+        $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+    } else {
+        $RepoRoot = (Get-Location).Path
+    }
+}
 
 $ErrorActionPreference = 'Continue'
 $Repo     = (Resolve-Path -LiteralPath $RepoRoot).Path
@@ -109,36 +120,18 @@ foreach ($fw in $cfg.frameworks.PSObject.Properties) {
 
         New-Item -ItemType Directory -Path $dst -Force | Out-Null
 
-        $shared = $false
-        if ($def.PSObject.Properties.Name -contains 'shared_target') { $shared = [bool]$def.shared_target }
-
-        if ($shared) {
-            # shared_target mode: never delete unknown siblings at dst
-            # (they may be skills installed by Claude's runtime into .agents/skills/)
-            foreach ($skillName in $skills.Keys) {
-                $target = Join-Path $dst $skillName
-                if (Test-Path -LiteralPath $target) {
-                    Write-Log "[$name] already present: $skillName (left untouched)"
-                    continue
-                }
-                Copy-SkillTree $skills[$skillName] $target
-                Write-Log "[$name] installed: $skillName"
-            }
-        } else {
-            # exclusive mode: remove stale skills at dst that are no longer in src
-            Get-ChildItem -LiteralPath $dst -Directory -ErrorAction SilentlyContinue |
-                Where-Object { -not $skills.ContainsKey($_.Name) } |
-                ForEach-Object {
-                    Write-Log "[$name] removing stale: $($_.Name)"
-                    Remove-DirRobust $_.FullName
-                }
-
-            foreach ($skillName in $skills.Keys) {
-                $target = Join-Path $dst $skillName
-                Remove-DirRobust $target
-                Copy-SkillTree $skills[$skillName] $target
-                Write-Log "[$name] installed: $skillName"
-            }
+        # Additive model for ALL frameworks:
+        #   - For each skill in src, overwrite dst/<skill>/ (so updates propagate)
+        #   - NEVER delete unknown entries in dst/ (framework built-ins and runtime-installed
+        #     skills must survive). If you want to drop a skill, delete it manually from dst
+        #     or add a stub SKILL.md with `name: __disabled__` later.
+        # `shared_target: true` in manifest is informational only (kept for documentation);
+        # behavior is identical either way.
+        foreach ($skillName in $skills.Keys) {
+            $target = Join-Path $dst $skillName
+            Remove-DirRobust $target
+            Copy-SkillTree $skills[$skillName] $target
+            Write-Log "[$name] installed: $skillName"
         }
 
         Write-Log "[$name] OK"
