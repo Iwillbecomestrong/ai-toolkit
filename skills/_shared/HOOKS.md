@@ -1,6 +1,6 @@
 # Hooks — 强制门禁清单
 
-> 本文档定义 auto-dev 和 multi-agent-core 的**强制门禁钩子**。
+> 本文档定义 auto-dev 的**强制门禁钩子**。
 >
 > **两层执行**：
 > - **Prompt 层** — SKILL.md 和 SKILL_CORE.md 中的钩子检查点（模型自觉遵守）
@@ -135,7 +135,7 @@
 }
 ```
 
-> 多框架支持：multi-agent-core 使用 `.collab-work` 替代 `.ai-work`。
+> `--orchestrator=codex|reasonix` 模式使用 `.collab-work` 替代 `.ai-work`。
 
 ---
 
