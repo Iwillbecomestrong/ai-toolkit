@@ -1,33 +1,24 @@
 # Skill 修改说明
 
-CHANGE_NAME: auto-dev-change-20260706-merge-multi-agent-core
+CHANGE_NAME: auto-dev-change-20260706-iron-law
 SOURCE_SESSION: reasonix-ironwill
-SOURCE_TASK: 合并 auto-dev + multi-agent-core + auto-code-android-dev
-BASE_SKILL_VERSION: post-shared-core (a80b0e1)
-BASE_COMMIT: a80b0e1
+SOURCE_TASK: AI 绕过 auto-dev 流程直接改代码
+BASE_SKILL_VERSION: post-merge (e445025)
+BASE_COMMIT: e445025
 
 ## 为什么要改
 
-1. auto-dev 和 multi-agent-core 结构完全相同，只差编排后端参数——没必要分两个 skill
-2. auto-code-android-dev 只是引用壳，90% 内容是"见 auto-dev"，独有内容（adb/emulator）可直接并入 auto-dev
+AI 即使有 PreToolUse hook，还是会在思考中绕过流程——说"这是小问题不需要走完整编排"然后直接读代码。
+需要 prompt 层铁律明确禁止这种行为。
 
 ## 改了什么
 
-- auto-dev SKILL.md 合并三种编排后端（claude/codex/reasonix）通过 `--orchestrator=` 切换
-- 并入 auto-code-android-dev 的 Android 专用内容（`--project=android`）
-- 删除 `skills/multi-agent-core/` 目录
-- 删除 `IronWill/.claude/skills/auto-code-android-dev/`
-- 更新 SKILL_CORE.md 和 HOOKS.md 移除 multi-agent-core 引用
-
-## 影响范围
-
-- 所有引用 multi-agent-core 的地方改为 auto-dev
-- install-all.ps1 不再安装 multi-agent-core
-- Android 项目直接用 `auto-dev --project=android`
+- auto-dev SKILL.md 开头新增 ⛔ 铁律 4 条
+- auto-code-android-dev SKILL.md 开头新增相同铁律
 
 ## 风险
 
-RISK: LOW — multi-agent-core 和 auto-dev 内容 99% 相同，合并无功能损失
+RISK: LOW — 纯提示词修改
 
 ## 是否建议合并
 

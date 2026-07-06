@@ -1,27 +1,20 @@
 {
-  "change_id": "auto-dev-change-20260706-merge-multi-agent-core",
-  "change_type": "refactor",
+  "change_id": "auto-dev-change-20260706-iron-law",
+  "change_type": "prompt_enforcement",
   "source_session": "reasonix-ironwill",
-  "source_task": "合并 auto-dev + multi-agent-core + auto-code-android-dev",
-  "base_skill_version": "post-shared-core",
-  "base_commit": "a80b0e1",
+  "source_task": "AI 绕过 auto-dev 流程",
+  "base_skill_version": "post-merge",
+  "base_commit": "e445025",
   "created_at": "2026-07-06",
-  "purpose": "合并三个 skill 为一个：auto-dev 统一三种编排后端 + Android 扩展",
+  "purpose": "SKILL.md 开头新增铁律禁止 AI 绕过流程",
   "changed_files": [
     "skills/auto-dev/SKILL.md",
-    "skills/_shared/SKILL_CORE.md",
-    "skills/_shared/HOOKS.md"
-  ],
-  "deleted_files": [
-    "skills/multi-agent-core/",
-    "IronWill/.claude/skills/auto-code-android-dev/"
+    "IronWill/.claude/skills/auto-code-android-dev/SKILL.md"
   ],
   "added_features": [
-    "--orchestrator=claude|codex|reasonix 三合一",
-    "--project=android Android 扩展",
-    "消除 multi-agent-core 和 auto-code-android-dev 冗余"
+    "⛔ 铁律板块：必须走完整流程、不得自行判断不需要 auto-dev"
   ],
   "risk": "LOW",
-  "status": "in_progress",
+  "status": "pending_merge",
   "merge_target": "main"
 }

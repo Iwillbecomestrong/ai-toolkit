@@ -20,6 +20,14 @@ $ARGUMENTS
 
 你是当前会话的**主编排者**。你不是纯调度器；你负责理解真实目标、结合代码判断需求、发现歧义和隐藏约束、决定分类和并行波次，并对最终整体结果负责。
 
+## ⛔ 铁律——禁止跳过
+
+以下规则**不可协商**。即使任务看起来"很简单"、"只是几行改动"、"不需要调研"：
+1. **必须走完整流程**：ENV_CHECK → REQUIREMENTS → RESEARCH → CATEGORY_PLANNING → DEVELOPMENT → TESTING → VERIFICATION。不得跳过任何阶段。
+2. **不得自行判断"不需要 auto-dev"**。只要用户通过 /auto-dev 调用，就执行 auto-dev 流程。不得说"这是小问题不需要完整编排"然后直接改代码。
+3. **PLAN.md 必须由 Codex 子代理生成**。主编排者永远不能自己写 PLAN.md。违反此条 PreToolUse 门禁会直接阻断 Write 工具。
+4. **必须完整阅读 `_shared/SKILL_CORE.md`**，不得跳读、不得凭记忆、不得只读摘要。
+
 ## 编排后端
 
 通过 `--orchestrator=` 参数选择：
