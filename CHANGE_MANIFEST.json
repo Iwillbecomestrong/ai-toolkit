@@ -1,0 +1,40 @@
+{
+  "change_id": "auto-dev-change-20260706-shared-core-hooks",
+  "change_type": "architecture_refactor",
+  "source_session": "reasonix-ironwill",
+  "source_task": "auto-dev & multi-agent-core 综合改造",
+  "base_skill_version": "current",
+  "base_commit": "ef596f3",
+  "created_at": "2026-07-06",
+  "purpose": "抽取共享核心、添加 PreToolUse 强制门禁、建立 worktree 版本管理",
+  "changed_files": [
+    "skills/_shared/SKILL_CORE.md",
+    "skills/_shared/HOOKS.md",
+    "skills/_shared/WORKFLOW.md",
+    "skills/_shared/ROUTING.md",
+    "skills/_shared/REPORT_FORMATS.md",
+    "skills/_shared/WORKTREE_GUIDE.md",
+    "skills/_shared/SKILL_VERSIONING.md",
+    "skills/_shared/scripts/auto_dev_guard.py",
+    "skills/_shared/skills/*.md",
+    "skills/_shared/templates/*.md",
+    "skills/auto-dev/SKILL.md",
+    "skills/multi-agent-core/SKILL.md",
+    "install-all.ps1"
+  ],
+  "added_features": [
+    "PreToolUse 4 大门禁 (auto_dev_guard.py)",
+    "plan_must_be_codex 钩子",
+    "codex_output_visible 钩子",
+    "stage_entry_check 钩子",
+    "pre_commit_gate 钩子",
+    "max_retry_gate 钩子",
+    "parallel_safety_check 钩子",
+    "post_task_reflection 钩子",
+    "Git worktree 版本管理体系",
+    "框架描述去偏袒化"
+  ],
+  "risk": "MEDIUM",
+  "status": "in_progress",
+  "merge_target": "auto-dev-next-v1.0.0"
+}

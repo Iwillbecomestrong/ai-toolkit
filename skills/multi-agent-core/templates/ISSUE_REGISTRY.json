@@ -1,0 +1,18 @@
+{
+  "task_id": "TASK-YYYYMMDD-HHMM-short-name",
+  "issues": [
+    {
+      "issue_id": "TEST-001",
+      "category_id": "category-id",
+      "description": "Problem summary",
+      "discovered_by": "tester",
+      "fix_owner": "developer",
+      "verify_owner": "tester",
+      "status": "OPEN",
+      "evidence_file": ".collab-work/runs/TASK-.../category-id/test-report.md",
+      "fix_file": "NONE",
+      "verify_file": "NONE",
+      "related_commit": "NONE"
+    }
+  ]
+}

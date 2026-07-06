@@ -1,0 +1,10 @@
+{
+  "task_id": "TASK-YYYYMMDD-HHMM-short-name",
+  "current_wave": 1,
+  "current_category": "category-id",
+  "current_phase": "planning",
+  "next_agent_role": "developer",
+  "next_input_file": ".collab-work/runs/TASK-.../category-id/PLAN.md",
+  "risk": "medium",
+  "last_commit": "NONE"
+}

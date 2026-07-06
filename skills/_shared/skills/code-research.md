@@ -1,0 +1,22 @@
+# Code Research
+
+默认把机械性调研优先交给第三方调研代理，但前提是不会影响结果质量。
+
+调研至少覆盖：
+
+- 相关文件
+- 调用链
+- 核心状态与持久化
+- 当前行为
+- 现有测试
+- 风险与未知项
+
+所有结论必须标记：
+
+- `CONFIRMED`
+- `INFERRED`
+- `UNKNOWN`
+
+输出：
+
+- `{STATE_DIR}/runs/<task-id>/<category-id>/CODE_CONTEXT.md`

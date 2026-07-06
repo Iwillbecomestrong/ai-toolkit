@@ -1,0 +1,14 @@
+{
+  "task_id": "TASK-YYYYMMDD-HHMM-short-name",
+  "current_wave": 1,
+  "current_category": "category-id",
+  "current_phase": "in_progress",
+  "status": "in_progress",
+  "last_output_file": ".collab-work/runs/TASK-.../category-id/plan.md",
+  "last_output_summary": "Write a 1-3 sentence summary here.",
+  "next_agent_role": "developer",
+  "next_agent_session": "session-or-agent-id",
+  "next_input_file": ".collab-work/runs/TASK-.../category-id/plan.md",
+  "risk": "medium",
+  "last_commit": "NONE"
+}
