@@ -13,6 +13,8 @@ allowed-tools: Read Write Edit Glob Grep Bash Agent SendMessage
 > **STATE_DIR**：`.ai-work`（通用）/ `.collab-work`（`--orchestrator=codex|reasonix` 默认时）
 >
 > **强制门禁**：见 `_shared/HOOKS.md`。PreToolUse guard：`_shared/scripts/auto_dev_guard.py`
+>
+> **运行可观测性**：凡是启动 Codex plan/review/implement，都必须使用会写 `status.json`、stdout/stderr 日志、静默超时状态的包装脚本。不得黑箱等待。
 
 用户需求：
 
@@ -27,6 +29,32 @@ $ARGUMENTS
 2. **不得自行判断"不需要 auto-dev"**。只要用户通过 /auto-dev 调用，就执行 auto-dev 流程。不得说"这是小问题不需要完整编排"然后直接改代码。
 3. **PLAN.md 必须由 Codex 子代理生成**。主编排者永远不能自己写 PLAN.md。违反此条 PreToolUse 门禁会直接阻断 Write 工具。
 4. **必须完整阅读 `_shared/SKILL_CORE.md`**，不得跳读、不得凭记忆、不得只读摘要。
+5. **用户中途补充信息 ≠ 退出 auto-dev**。即使用户插话补充需求、提问或纠正，auto-dev 流程不会取消。收到任何消息后，第一步永远是读取 STATE.json 恢复状态，吸收用户补充，从当前阶段继续推进。不得因为用户插话就退化到普通聊天模式。
+
+## 会话恢复协议 —— 每轮对话第一步，不可跳过
+
+无论用户发来什么消息——补充需求、提问、纠正、甚至闲聊——在回复之前必须先执行：
+
+1. **读取 `{STATE_DIR}/STATE.json`**
+2. 若 STATE.json 存在且 `current_phase` ≠ `done` 且 ≠ `blocked`：
+   - 你仍是主编排者，auto-dev 流程未完成
+   - 用户的消息是流程中的补充输入，不是"新任务"
+   - 将用户补充内容融入当前阶段的上下文
+   - 从 `current_phase` 继续推进，**不得**重新开始、**不得**退回、**不得**偏离到普通聊天模式
+3. 若 STATE.json 不存在：这是首次调用，从 ENV_CHECK 开始
+4. 若 `current_phase` = `blocked`：向用户报告阻塞原因，询问是否解除
+5. 若 `current_phase` = `done`：流程已完成，正常回复
+6. **向用户报告**：当前阶段 + 下一步动作，确认后执行
+
+### 用户插话处理规则
+
+| 用户消息类型 | 处理方式 |
+|---|---|
+| 补充需求/约束 | 融入 REQUIREMENTS.md，评估是否需要重新分类 |
+| 纠正错误理解 | 更新 DECISIONS.md，检查是否影响已完成阶段 |
+| 提问当前进度 | 报告 STATE.json 摘要 + 当前阶段产物清单，不中断流程 |
+| 要求跳过/加速 | 评估风险后决定，但不得跳过强制门禁（plan_must_be_codex、pre_commit_gate 等） |
+| 无关闲聊 | 一句话回复后立即回到流程，不展开新话题 |
 
 ## 编排后端
 
@@ -46,7 +74,7 @@ $ARGUMENTS
 - 本会话运行在 Codex（Codex A 编排），默认模型 `gpt-5.4`
 - Codex B（计划+验收）：`gpt-5.4`，复杂升 `gpt-5.5`
 - Codex C（独立审查）：`gpt-5.4`，高风险升 `gpt-5.5`
-- 返工升级路径同在 WORKFLOW.md
+- 返工升级路径同在 `_shared/WORKFLOW.md`
 
 ### `--orchestrator=reasonix`
 
@@ -62,8 +90,12 @@ $ARGUMENTS
 3. 运行环境检查：
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File "scripts/auto-dev/check-environment.ps1" -ProjectRoot "."
+powershell -NoProfile -ExecutionPolicy Bypass -File "<project wrapper script>" -ProjectRoot "."
 ```
+
+其中：
+- 通用项目可提供 `scripts/auto-dev/check-environment.ps1`
+- IronWill Android 包装层使用 `scripts/auto-code-android-dev/check-environment.ps1`
 
 4. 读取环境报告（`.ai/ENVIRONMENT_REPORT.md` 或 `.collab/ENVIRONMENT_REPORT.md`）
 5. 后续流程见 `_shared/SKILL_CORE.md`

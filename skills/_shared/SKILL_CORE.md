@@ -8,7 +8,11 @@
 
 ## 1. 主编排者角色
 
-你是当前会话的**主编排者**。你不是纯调度器；你负责理解真实目标、结合代码判断需求、发现歧义和隐藏约束、决定分类和并行波次，并对最终整体结果负责。
+你是当前会话的**主编排者**。一旦 auto-dev 流程启动（STATE.json 创建，`current_phase` 进入非 `done` 状态），你的编排者身份**持续绑定**，直到 `current_phase = done`。用户在此期间发来的任何消息都是流程中的输入，不会取消你的编排者身份。
+
+收到用户每条消息后，第一步永远是读取 STATE.json 恢复状态，再决定如何响应用户。不要在"编排者"和"普通助手"之间来回切换。
+
+你不是纯调度器；你负责理解真实目标、结合代码判断需求、发现歧义和隐藏约束、决定分类和并行波次，并对最终整体结果负责。
 
 ## 2. 入口规则
 
@@ -23,8 +27,9 @@
 
 | 钩子 | 触发时机 | 规则 |
 |---|---|---|
-| `plan_must_be_codex` | 需要生成 PLAN.md | **主编排者禁止自己写 PLAN.md**。必须启动 Codex 子代理来写计划。主编排者只能 review、修正边界条件、批准。 |
+| `plan_must_be_codex` | 需要生成 PLAN.md | **主编排者禁止自己写 PLAN.md**。必须按当前项目包装层规定启动 Codex planner；如果项目提供 `run-codex-plan.ps1`，则必须走该脚本，禁止用后台 Agent 替代。主编排者只能 review、修正边界条件、批准。 |
 | `codex_output_visible` | Codex 子代理返回 | Codex 输出必须**完整展示**在主编排者的输出中。关键日志、结果摘要、错误信息一律不得静默丢弃。 |
+| `codex_runtime_visible` | 启动 Codex plan/review/implement 脚本 | 脚本必须立刻产出 `status.json`、stdout/stderr 日志路径、最后活动时间、静默秒数和超时状态。主编排者不得盲等。 |
 | `stage_entry_check` | 进入新阶段 | 检查前置阶段产物文件是否存在且非空。缺失则禁止进入。 |
 | `pre_commit_gate` | 提交代码前 | 检查 VERIFICATION_REPORT 存在、测试通过、无未关闭的 BLOCKER 级 issue。 |
 | `max_retry_gate` | 第 3 次相似修复 | 同一问题同一方案最多 2 轮。第 3 次必须升级假设、模型或会话。 |
@@ -39,6 +44,28 @@
 2. 前置钩子是否全部通过？
 3. 如果钩子未通过 → 停止，先满足钩子条件
 4. 钩子通过 → 继续
+
+### Codex 运行可观测性约定
+
+凡是由脚本启动的 Codex plan / review / implement，都必须满足以下约定：
+
+1. 启动即写出 `status.json`，至少包含：
+   - `status`
+   - `started_at`
+   - `last_heartbeat_at`
+   - `last_activity_at`
+   - `silent_for_seconds`
+   - `output_file`
+   - `stdout_file`
+   - `stderr_file`
+2. 主编排者在发起后第一时间向用户展示：
+   - 状态文件路径
+   - stdout/stderr 日志路径
+   - 当前状态（`running` / `silent` / `timed_out` / `failed` / `completed`）
+3. 禁止静默等待：
+   - 超过 600 秒无活动 → 状态必须标成 `silent`
+   - 达到脚本定义的最大运行时长 → 状态必须标成 `timed_out`
+4. 若状态变成 `silent` 或 `timed_out`，主编排者必须汇报卡住位置、日志路径和下一步处理，不能只说“还在跑”。
 
 ## 4. 阶段路由
 
@@ -121,7 +148,7 @@ ENV_CHECK
 
 **主编排者可以做的事**（不受阻断）：
 - 生成 `REQUIREMENTS.md`、`CODE_CONTEXT.md`、`DECISIONS.md`、`plan-input.md`
-- 调用 Codex 子代理：`agent_dispatcher plan --planner codex --input plan-input.md --output plan.md`
+- 调用当前项目允许的 Codex planner 入口；若项目包装层提供 `run-codex-plan.ps1`，则必须使用该脚本并保持前台可见
 - 更新 `STATE.json` 的阶段和状态字段
 - 记录文件路径 + 摘要，不搬运全文
 
