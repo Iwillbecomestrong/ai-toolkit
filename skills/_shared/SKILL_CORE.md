@@ -102,8 +102,9 @@
    - 当前开放问题与 `HANDOFF.md`
 8. 不能用摘要替代完整计划阅读。
 9. 公共接口、数据结构、状态机基础、迁移、高权限、跨日/时间、后台恢复等节点完成后，必须先做关键中途检查。
-10. 同一问题最多自动两轮相似修复；第二次仍失败必须升级假设、证据、模型或会话。
-11. 完成前必须记录新鲜验证证据：`VERIFIED_COMMIT`、`VERIFICATION_COMMAND`、`VERIFICATION_TIME`、`EXIT_CODE`、`RESULT_FILE`、`DEVICE_TEST_STATUS`、`REMAINING_RISKS`。
+10. **测试先行**：凡是可测试的需求，类别开发阶段必须先写测试再写实现。测试即"靶"——先定义"怎样算通过"，再射箭。避免实现完再补测试（射箭后描靶）。PLAN.md 的验收标准必须可被自动化检验，不能只是文字描述。
+11. 同一问题最多自动两轮相似修复；第二次仍失败必须升级假设、证据、模型或会话。
+12. 完成前必须记录新鲜验证证据：`VERIFIED_COMMIT`、`VERIFICATION_COMMAND`、`VERIFICATION_TIME`、`EXIT_CODE`、`RESULT_FILE`、`DEVICE_TEST_STATUS`、`REMAINING_RISKS`。
 
 ## 6. 状态文件
 
