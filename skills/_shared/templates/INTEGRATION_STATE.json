@@ -1,0 +1,19 @@
+{
+  "wave": 1,
+  "categories": [
+    "category-a",
+    "category-b",
+    "category-c"
+  ],
+  "merge_order": [
+    "category-a",
+    "category-b",
+    "category-c"
+  ],
+  "merged": [],
+  "current_category": "category-a",
+  "integration_status": "in_progress",
+  "failed_test": null,
+  "related_files": [],
+  "next_action": "merge_category_a"
+}
