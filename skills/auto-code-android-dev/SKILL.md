@@ -12,7 +12,7 @@ allowed-tools: Read Write Edit Glob Grep Bash Agent SendMessage
 
 $ARGUMENTS
 
-> **基础框架**：本 skill 与 [`auto-dev`](../auto-dev/SKILL.md) 共用 `../` 下的核心文件（SKILL_CORE、WORKFLOW、HOOKS、ROUTING 等）。Android 专用差异仅在本文件定义。
+> **基础框架**：本 skill 与 [`auto-dev`](../auto-dev/SKILL.md) 共用 `../_shared/` 下的核心文件（SKILL_CORE、WORKFLOW、HOOKS、ROUTING 等）。Android 专用差异仅在本文件定义。
 
 ## ⛔ 铁律——禁止跳过（继承自 auto-dev）
 
@@ -20,7 +20,7 @@ $ARGUMENTS
 1. **必须走完整流程**：ENV_CHECK → REQUIREMENTS → RESEARCH → CATEGORY_PLANNING → DEVELOPMENT → TESTING → VERIFICATION
 2. **不得自行判断"不需要 auto-dev"**。只要通过 /auto-code-android-dev 调用，就必须执行完整流程
 3. **PLAN.md 必须由 Codex 子代理生成**。主编排者永远不能自己写 PLAN.md
-4. **必须完整阅读 `../SKILL_CORE.md`**
+4. **必须完整阅读 `../_shared/SKILL_CORE.md`**
 5. **用户中途补充信息 ≠ 退出流程**。即使用户插话补充需求、提问或纠正，流程不会取消。收到任何消息后，第一步永远是读取 STATE.json 恢复状态，从当前阶段继续推进
 6. **分类由主编排者亲自做，计划每类独立出**。CATEGORY_DISCOVERY 是编排决策，严禁委托 Codex。BATCH_PLAN_BY_SUBAGENT = 每类一个独立 Codex planner（N 类 = N 次调用），严禁一个 Codex 包揽全部类别
 
@@ -118,4 +118,4 @@ _shared/                              ← 本文件所在目录
 └── auto-code-android-dev/SKILL.md    ← 本文件：Android 编排入口
 ```
 
-未覆盖的规则一律回退到 [`auto-dev`](../auto-dev/SKILL.md) 和 `../SKILL_CORE.md`。
+未覆盖的规则一律回退到 [`auto-dev`](../auto-dev/SKILL.md) 和 `../_shared/SKILL_CORE.md`。
