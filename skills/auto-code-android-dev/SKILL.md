@@ -61,14 +61,19 @@ find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
 无论用户发来什么消息，在回复之前必须先执行：
 
 1. **读取 `.ai-work/STATE.json`**
-2. 若 STATE.json 存在且 `current_phase` ≠ `done` 且 ≠ `blocked`：
-   - 你仍是主编排者，流程未完成
-   - 用户的消息是流程中的补充输入，不是"新任务"
-   - 从 `current_phase` 继续推进，**不得**重新开始、**不得**退回
+2. 根据 `current_phase` 和消息类型判断处理：
+
+   | `current_phase` | 收到的消息 | 处理 |
+   |---|---|---|
+   | `done` | 纯文字 | 正常聊天回复 |
+   | `done` | `/auto-code-android-dev` 触发 | **新任务**：从 ENV_CHECK 开始 |
+   | `blocked` | 任何消息 | **必须询问用户**："上一任务仍在 blocked。先收尾还是开新任务？" |
+   | 其它 | 纯文字补充 | **流程内补充输入**：融入当前阶段，**不得**重新开始 |
+   | 其它（非 done/blocked） | `/auto-code-android-dev` 触发 | **必须询问用户**："上一任务在 X 阶段。先收尾还是开新任务？" |
+
 3. 若 STATE.json 不存在：这是首次调用，从 ENV_CHECK 开始
-4. 若 `current_phase` = `blocked`：向用户报告阻塞原因
-5. 若 `current_phase` = `done`：流程已完成，正常回复
-6. **向用户报告**：当前阶段 + 下一步动作
+4. **不得自行判断**任务结束或开始新任务
+5. **向用户报告**：当前阶段 + 下一步动作
 
 ### 用户插话处理
 
@@ -78,6 +83,7 @@ find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
 | 纠正错误理解 | 更新 DECISIONS.md，检查是否影响已完成阶段 |
 | 提问当前进度 | 报告 STATE.json 摘要，不中断流程 |
 | 要求跳过/加速 | 评估风险，但不得跳过强制门禁 |
+| **带 /skill 触发且任务未 done** | **必须询问用户**：先收尾当前任务还是开始新任务 |
 | 无关闲聊 | 一句话回复后立即回到流程 |
 
 ## Android 专用差异
