@@ -84,6 +84,43 @@ $ARGUMENTS
 - 测试者：Codex 子代理（固定 deepseekV4flash）
 - Reasonix 直做所有编排决策，Codex 只做执行
 
+## Plan Agent 自动选择 (Fallback 决策树)
+
+按下列顺序尝试 plan agent，**任何一个能用就用，不行则跳过**：
+
+```
+1. Codex 可用吗?
+   test:  echo "Say hi" | codex exec -C . --sandbox read-only --color never -m gpt-5.4 - 2>&1 | head -3
+         检查输出是否包含 "ERROR: You've hit your usage limit"
+   └─ YES → scripts/auto-code-android-dev/run-codex-plan.ps1 (前台, 等待 PLAN.md)
+   
+2. Reasonix 可用吗?
+   test:  reasonix --version && echo $DEEPSEEK_API_KEY | head -c 5
+   └─ OK → reasonix run -m deepseek-v4-pro --effort high --no-config
+                "You are planner B, write PLAN.md to {path}"
+            提示中禁止要求任何网页搜索/MCP 工具调用
+            等待 Reasonix 写出 PLAN.md
+
+3. 两者都不可用:
+   主编排者直接写 PLAN.md, 顶部必须包含声明:
+   "**PLAN 由主编排者直接编写 (Codex 限流 + Reasonix 不可用)**"
+   用户明确 override 后可执行
+```
+
+### 决策日志
+
+每次选择记录到 `.ai-work/runs/<task>/PLAN_DECISION.json`:
+```json
+{
+  "task_id": "...",
+  "timestamp": "...",
+  "codex": {"tested": true, "available": false, "reason": "usage limit"},
+  "reasonix": {"tested": true, "available": true, "model": "deepseek-v4-pro"},
+  "fallback": "reasonix",
+  "output": ".ai-work/runs/.../PLAN.md"
+}
+```
+
 ## 入口规则
 
 1. 解析 `$ARGUMENTS`：提取 `--orchestrator=` 和 `--project=` 参数
