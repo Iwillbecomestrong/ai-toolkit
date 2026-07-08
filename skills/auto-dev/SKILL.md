@@ -112,6 +112,39 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "<project wrapper script>" -
   → 检查 verification-report.md 存在且 EXIT_CODE = 0
 ```
 
+## ⛔ 工作树 commit 规范（强约束）
+
+为防止 Agent 在 working tree 累积未提交改动**导致 linter/编辑器/session 中断时全丢**（实测 100+ 行代码丢失事件），
+**强制每完成一个原子步骤立即 commit**：
+
+### `commit_step_gate`（每步强制）
+
+1. 任何 Edit/Write/Bash 修改源码或文档后，**必须**在同一 Agent 的下一步操作前：
+   ```bash
+   git status --short   # 确认本次修改范围
+   git add <精确文件>  # 不要用 git add . / git add -A
+   git commit -m "<明确的 step message>"
+   ```
+2. 禁止"先把所有改完再一次性 commit"——这是工作树丢失的**主因**。
+3. 禁止用 `git add .` / `git add -A`——会带进无关文件，必须精确指定。
+
+### `working_tree_audit`（任务结束强制）
+
+Agent 退出/任务完成/子任务切换前，**必须**：
+
+```bash
+# 1. 验证 working tree 干净
+git status --short
+# 输出必须为空，否则 commit 或 revert
+# 如果有改动但属于当前任务, commit; 如果属于 pre-existing 改动, 通知用户决定
+```
+
+### 失败模式
+
+- 任务结束 `git status` 不为空 → 不得声称"完成"
+- Agent 报"已完成"但 `git log --oneline` 没有新 commit → 主编排必须强制重做或 commit
+- 多个 Agent 并行时，每个 Agent 只 commit 自己负责的文件
+
 ## Android 项目 (`--project=android`)
 
 Android 项目额外规则：

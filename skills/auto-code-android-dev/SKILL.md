@@ -24,6 +24,38 @@ $ARGUMENTS
 5. **用户中途补充信息 ≠ 退出流程**。即使用户插话补充需求、提问或纠正，流程不会取消。收到任何消息后，第一步永远是读取 STATE.json 恢复状态，从当前阶段继续推进
 6. **分类由主编排者亲自做，计划每类独立出**。CATEGORY_DISCOVERY 是编排决策，严禁委托 Codex。BATCH_PLAN_BY_SUBAGENT = 每类一个独立 Codex planner（N 类 = N 次调用），严禁一个 Codex 包揽全部类别
 
+## ⛔ Android 工作树 + 编译 强约束
+
+**继承自 auto-dev 工作树 commit 规范，Android 项目额外加编译验证。**
+
+### `android_commit_step_gate`（每步 commit 前）
+
+任何 Kotlin/XML 修改后，在 `git commit` **之前**必须：
+
+```bash
+# 1. 编译验证（修改没破坏现有代码）
+./gradlew :app:compileDebugKotlin 2>&1 | tail -5
+# 2. 验证本次修改范围
+git status --short
+# 3. 精确 add + commit
+git add <精确文件>
+git commit -m "fix(alarm): ..."
+```
+
+如果 `compileDebugKotlin` 失败 → 修代码，**不得** commit 失败状态。
+
+### `apk_timestamp_check`（安装前强制）
+
+```bash
+# 验证 APK 比源码新
+ls -la app/build/outputs/apk/debug/app-debug.apk
+find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
+# 如果有更新的 kt 文件, 重新 build:
+./gradlew :app:assembleDebug
+```
+
+如果源代码比 APK 新但未重新构建 → 不得 push 装机。
+
 ## 会话恢复协议 —— 每轮对话第一步，不可跳过
 
 无论用户发来什么消息，在回复之前必须先执行：

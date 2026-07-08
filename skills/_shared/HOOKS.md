@@ -8,6 +8,8 @@
 >
 > 总体原则：**Skill 说明流程，STATE.json 记录阶段，agent_dispatcher 调用代理，Hook 阻止违规。**
 
+> **任务模式兼容**：对于 IronWill 这类已经迁移到 `.ai/tasks/<TASK-ID>/STATUS.md` 的项目，guard 会在未找到可用 `.ai-work/STATE.json` 时自动发现最新活跃任务，并对该任务应用门禁。
+
 ---
 
 ## 一、STATE.json 阶段枚举
@@ -71,6 +73,47 @@
 - **拒绝** → `这是只读产物文件。主编排者不得覆盖。由原责任代理维护。`
 - **允许**：记录文件路径 + 1~3 句话摘要 + 风险 + 下一代理 + 下一输入文件
 
+### Task Gate：`.ai/tasks` 模式下缺计划时禁止绕过 Codex planner
+
+- **触发**：guard 自动发现 `.ai/tasks/<TASK-ID>/STATUS.md` 为当前活跃任务，且该任务缺少 `PLAN.md`
+- **拒绝 1**：任何 `Agent` / `SendMessage` 工具调用
+  - **原因**：禁止拿后台子任务代替 Codex B planner
+- **拒绝 2**：任何非只读 `Bash` 命令
+  - **允许**：显式运行 `run-codex-plan.ps1`；以及 `rg` / `Get-Content` / `git status` 等只读检查
+- **拒绝 3**：任何源码 `Write` / `Edit` / `MultiEdit`
+  - **原因**：当前任务还没有 Codex 生成的计划，不能进入开发
+
+这层门禁的目标不是替代完整状态机，而是防止主编排者在 `.ai/tasks` 模式下”口头承认漏了 Codex 计划，却继续靠后台 Agent 或其他命令往前走”。
+
+### Gate 5: 工作树卫生门禁 (working_tree_hygiene)
+
+**目的**：防止 Agent 在 working tree 累积未提交改动导致 linter/编辑器/session 中断时全丢（实测 100+ 行代码丢失事件）。
+
+- **触发**：
+  - Agent 报告”完成” / “已 commit” / “可验收”
+  - 用户切到新 Agent 接手前
+  - 任何 `Bash` 命令包含 `git commit` / `git push` / `git merge`
+  - Agent 退出 / session 切换
+- **检查**：
+  1. 读取 `git status --short` 输出
+  2. 如果有 `M` 或 `??` 标记的**未相关**改动（不在 `git add` 范围），阻断并提示：
+     ```
+     ⛔ working tree 有未提交改动:
+     M  app/src/main/java/com/ironwill/app/LockWindowManager.kt
+     ?? scripts/auto-code-android-dev/_codex-runtime.ps1
+     
+     处理方式：
+     A) 如果属于当前任务: git add + git commit
+     B) 如果是 pre-existing 改动: 通知用户决定（不要自动 commit）
+     C) 如果是误改: git restore <file> 或 git clean -fd
+     ```
+  3. 阻断”完成”声明，要求先 commit 或 revert
+- **允许**：
+  - 只读 `git status` / `git log` / `git diff` 检查
+  - `git add` + `git commit`（前提是精确指定文件，不用 `.` 或 `-A`）
+  - `git restore <file>` 撤销错误改动
+- **失败行为**：阻断 commit、阻断”完成”声明、阻断 Agent 退出
+
 ---
 
 ## 三、System 层：Stop Hook（轻量提醒）
@@ -100,6 +143,7 @@
 |---|---|---|
 | `plan_must_be_codex` | CATEGORY_PLANNING 阶段 | 主编排者禁止自己写 PLAN.md，必须调用 Codex 子代理。Gate 2 提供系统级兜底。 |
 | `codex_output_visible` | Codex 子代理返回 | Codex 输出必须展示在主编排者输出中，至少展示 STATUS/SUMMARY/CONFIDENCE/RISK。 |
+| `codex_runtime_visible` | 启动 Codex plan/review/implement 脚本 | 启动后必须立刻产出 `status.json` + stdout/stderr 日志路径；超过 600 秒无活动必须标记 `silent`，达到脚本上限必须标记 `timed_out`。 |
 | `stage_entry_check` | 进入新阶段 | 检查前置产物齐全，缺失则禁止进入。 |
 | `pre_commit_gate` | git commit 前 | 检查 VERIFICATION_REPORT 存在且通过。Gate 3 提供系统级兜底。 |
 | `max_retry_gate` | 第 3 次相似修复 | 强制升级假设/模型/会话。 |
@@ -118,17 +162,32 @@
     "PreToolUse": [
       {
         "matcher": "",
-        "command": "python \"{SKILL_PATH}/scripts/auto_dev_guard.py\" pretooluse \"{PROJECT_DIR}/.ai-work\""
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"%USERPROFILE%\\.agents\\skills\\_shared\\scripts\\auto_dev_guard.py\" pretooluse \"{PROJECT_DIR}\\.ai-work\""
+          }
+        ]
       }
     ],
     "Stop": [
       {
-        "command": "python \"{SKILL_PATH}/scripts/auto_dev_guard.py\" stop \"{PROJECT_DIR}/.ai-work\""
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"%USERPROFILE%\\.agents\\skills\\_shared\\scripts\\auto_dev_guard.py\" stop \"{PROJECT_DIR}\\.ai-work\""
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "command": "python \"{SKILL_PATH}/scripts/auto_dev_guard.py\" userpromptsubmit \"{PROJECT_DIR}/.ai-work\""
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"%USERPROFILE%\\.agents\\skills\\_shared\\scripts\\auto_dev_guard.py\" userpromptsubmit \"{PROJECT_DIR}\\.ai-work\""
+          }
+        ]
       }
     ]
   }
@@ -136,6 +195,7 @@
 ```
 
 > `--orchestrator=codex|reasonix` 模式使用 `.collab-work` 替代 `.ai-work`。
+> **guard 自动跳过**：只有在旧 `.ai-work/STATE.json` 活跃，或自动发现 `.ai/tasks` 活跃任务时才应用门禁；普通会话不受影响。
 
 ---
 
@@ -198,3 +258,32 @@ echo '{"tool_name":"Edit","file_path":"src/main.py"}' | python scripts/auto_dev_
 2. 在 Skill 的 SKILL.md 中声明使用的钩子
 3. 在 Claude Code hooks 配置中添加对应的 PreToolUse 规则
 4. 自定义 SOURCE_DIRS / RESTRICTED_COMMANDS 等常量以匹配 Skill 需求
+
+## 十、Codex 启动脚本约定
+
+以下规则不是 Claude 原生 hook 阻断，而是所有 Codex 启动脚本必须满足的运行约定：
+
+1. 每次运行 plan / review / implement，都要创建独立运行目录。
+2. 运行目录中至少包含：
+   - `status.json`
+   - `stdout.log`
+   - `stderr.log`
+   - `prompt.txt`
+3. `status.json` 至少记录：
+   - `status`
+   - `pid`
+   - `started_at`
+   - `last_heartbeat_at`
+   - `last_activity_at`
+   - `silent_for_seconds`
+   - `output_file`
+   - `stdout_file`
+   - `stderr_file`
+4. 推荐状态枚举：
+   - `starting`
+   - `running`
+   - `silent`
+   - `timed_out`
+   - `failed`
+   - `completed`
+5. 主编排者必须把状态文件和日志文件路径回显给用户，禁止黑箱等待。
