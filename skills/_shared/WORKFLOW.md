@@ -6,14 +6,35 @@
 INIT
   -> ENV_CHECK
   -> RESEARCH
-  -> CATEGORY_DISCOVERY
-  -> BATCH_PLAN_BY_SUBAGENT   ← plan_must_be_codex 钩子
+  -> CATEGORY_DISCOVERY          ← 主编排者亲自分类，严禁委托 Codex
+  -> BATCH_PLAN_BY_SUBAGENT      ← 每类独立启动一个 Codex planner（N 类 = N 次 Codex 调用）
   -> WAVE_LOOP
   -> FINAL_REGRESSION
   -> FINAL_ACCEPTANCE
   -> OPTIONAL_FINAL_INDEPENDENT_REVIEW
   -> COMPLETE
 ```
+
+### CATEGORY_DISCOVERY（主编排者亲自执行，不可委托）
+
+1. 主编排者基于 RESEARCH 阶段的产物（CODE_CONTEXT.md、调研报告），**亲自**阅读并理解每个 Bug/需求的代码范围
+2. 按**文件耦合度**分组：改同一文件/同一模块的归入同一类
+3. 识别依赖关系：A 类的输出是否是 B 类的输入
+4. 产出 `CATEGORIES.md`，至少包含：
+   - 每个类覆盖哪些 Bug/需求
+   - 涉及哪些文件
+   - 类之间的依赖关系（无依赖 / A→C / 共享文件冲突）
+   - 推荐执行顺序和可并行组合
+5. **严禁**将分类工作丢给 Codex 子代理。分类是编排决策，不是机械劳动
+
+### BATCH_PLAN_BY_SUBAGENT（每类独立 Codex planner）
+
+1. 对 CATEGORIES.md 中的**每个类别**，独立启动一个 Codex planner 子代理
+2. N 个类别 = N 次 Codex planner 调用（可以部分并行，因为各类独立）
+3. 每个 Codex planner 只看到自己类别的需求、涉及文件、约束条件
+4. 每个类别产出独立的 `PLAN.md` + `plan.meta.json`
+5. 主编排者逐个 review 每类计划，检查跨类接口一致性，批准后进入 WAVE_LOOP
+6. **严禁**一个 Codex planner 包揽所有类别的计划（会导致上下文污染、计划质量下降）
 
 `WAVE_LOOP` 展开为：
 
@@ -184,3 +205,40 @@ WAVE_PREPARE
 提交前 → 触发 `pre_commit_gate` 钩子。
 
 任务完成后 → 触发 `post_task_reflection` 钩子。
+
+## 11. 工作树 commit 规范（强约束）
+
+**目的**：防止 Agent 在 working tree 累积未提交改动 → linter/编辑器/session 中断时全丢（实测 100+ 行代码丢失事件）。
+
+### `commit_step_gate`（每步强制）
+
+任何源码/文档修改后，**必须**在同一 Agent 的下一步操作前：
+
+```bash
+git status --short                       # 确认本次修改范围
+git add <精确文件>                       # 不要用 git add . / git add -A
+git commit -m "<明确的 step message>"
+```
+
+**禁止**：
+- 把多个步骤累积到 working tree 再一次性 commit
+- 用 `git add .` / `git add -A`（会带进无关文件）
+- "等真机验收再 commit"（真机前要 commit，否则丢失无恢复）
+
+### `working_tree_audit`（任务/Agent 切换时强制）
+
+Agent 退出、任务完成、子任务切换前**必须**：
+
+```bash
+git status --short                       # 输出必须为空，否则 commit 或 revert
+```
+
+**失败行为**：
+- 任务结束 `git status` 不为空 → 不得声称"完成"
+- Agent 报"已完成"但 `git log --oneline` 没有新 commit → 主编排必须强制重做或 commit
+
+### 实施保障
+
+- `scripts/auto_dev_guard.py` Gate 5: commit/push 前自动检查
+- `auto-dev/SKILL.md` §commit_step_gate: 提示词层强制
+- `auto-code-android-dev/SKILL.md` §android_commit_step_gate: Android 额外加编译验证
