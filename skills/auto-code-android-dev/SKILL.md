@@ -86,6 +86,25 @@ find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
 | **带 /skill 触发且任务未 done** | **必须询问用户**：先收尾当前任务还是开始新任务 |
 | 无关闲聊 | 一句话回复后立即回到流程 |
 
+### `blocked` 状态处理
+
+`current_phase = blocked` 表示任务暂停等待外部条件。主编排 **不得自行 unblock**。
+
+进入条件（参考 `../_shared/SKILL_CORE.md` §2.1）：
+- 用户主动说"先暂停/先做别的"（v3 当前就是这个情况）
+- 关键依赖不可用（Codex + Reasonix 都不可用）
+- 真机验收中用户挂断/出门
+- 同一类别编译/测试反复失败 ≥ 3 次
+- 关键外部 API 不可用
+- Plan Agent 反复 PLAN_GAP 2 次以上
+
+进入 blocked 时：
+1. STATE.json 加 `block_reason` 字段
+2. 写 `.ai-work/runs/<task>/BLOCKED.md` 记录原因
+3. 报告用户
+
+解除 blocked：仅用户明确指令时执行
+
 ## Android 专用差异
 
 ### 入口规则

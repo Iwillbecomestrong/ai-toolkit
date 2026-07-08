@@ -62,6 +62,29 @@ $ARGUMENTS
 | **带 /skill 触发且任务未 done** | **必须询问用户**：先收尾当前任务还是开始新任务 |
 | 无关闲聊 | 一句话回复后立即回到流程，不展开新话题 |
 
+### `blocked` 状态处理
+
+`current_phase = blocked` 表示任务暂停等待外部条件。主编排 **不得自行 unblock**。
+
+进入条件（参考 `../_shared/SKILL_CORE.md` §2.1）：
+- 用户主动说"先暂停/先做别的"
+- 关键依赖不可用（Codex + Reasonix 都不可用，且主编排被禁止直接写 PLAN）
+- 真机验收中用户挂断/出门
+- 同一类别编译/测试反复失败 ≥ 3 次
+- 关键外部 API 不可用
+- Plan Agent 反复 PLAN_GAP 2 次以上
+
+进入 blocked 时：
+1. STATE.json 加 `block_reason` 字段
+2. 写 `.ai-work/runs/<task>/BLOCKED.md` 记录原因
+3. 报告用户："任务已 block, 原因: X, 解除需要: Y, 等你确认"
+
+解除 blocked：
+- 仅用户明确指令"恢复/继续/解除" 时执行
+- 删除 block_reason
+- 回到 blocked 前的阶段
+- 在 BLOCKED.md 记录解除时间和原因
+
 ## 编排后端
 
 通过 `--orchestrator=` 参数选择：
