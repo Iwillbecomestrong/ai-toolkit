@@ -1,6 +1,6 @@
 # Category Planning
 
-分类后由子代理做类别计划（`plan_must_be_codex` 钩子）。
+分类后由 DeepSeek V4 Pro planner / OpenCode-OMO hyperplan 做类别计划（`plan_must_be_agent` 钩子）。
 
 计划至少覆盖：
 

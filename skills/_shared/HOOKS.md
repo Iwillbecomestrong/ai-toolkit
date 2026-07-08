@@ -18,8 +18,8 @@
 |---|---|---|
 | `intake` | 初始化 | 需求澄清、创建 STATE.json |
 | `research` | 调研中 | 文件读取、调研代理调用 |
-| `planning` | 计划中 | 调用 Codex planner，禁止编辑源码 |
-| `plan_review` | 计划审查 | 主编排 review 计划 |
+| `planning` | 计划中 | 调用 DeepSeek V4 Pro planner / OpenCode-OMO plan wrapper，禁止编辑源码 |
+| `plan_review` | 二次计划审查 | 独立审查 `PLAN.md`，必须产出 `PLAN_REVIEW.md` 并批准 |
 | `development` | 开发中 | 允许编辑源码 |
 | `testing` | 测试中 | 允许编辑测试文件、修复 bug |
 | `acceptance` | 验收中 | 只读 + 验收报告 |
@@ -31,11 +31,11 @@
 
 ---
 
-## 二、System 层：PreToolUse 四大强制门禁
+## 二、System 层：PreToolUse 强制门禁
 
 由 `scripts/auto_dev_guard.py` 实现，通过 Claude Code hooks 系统调用。
 
-### Gate 1：未批准计划前禁止修改源码
+### Gate 1：未批准计划 / 未通过二次计划审查前禁止修改源码
 
 - **触发**：工具为 Write / Edit / MultiEdit，目标路径在 `app/` `src/` `lib/` `core/` `packages/` 下
 - **检查**：
@@ -43,26 +43,31 @@
   - `plan_status` = "approved"
   - `plan_file` 存在
   - `plan.meta.json` 存在
-  - `plan.meta.json.created_by` = "codex-planner"
+  - `plan.meta.json.created_by` ∈ {`deepseek-v4-pro-planner`, `opencode-omo-hyperplan`, `planner`}
   - `plan.meta.json.plan_status` = "approved"
-- **拒绝** → `当前任务尚未进入可开发阶段。请先完成调研、需求确认，并通过 Codex planner 生成并批准 plan.md。`
+  - `plan_review_status` = "approved"
+  - `PLAN_REVIEW.md` 或 `plan_review_file` 存在
+- **拒绝** → `当前任务尚未进入可开发阶段。请先完成调研、需求确认、计划生成，并通过二次计划审查。`
 
 ### Gate 2：主编排者不能直接写正式计划
 
 - **触发**：工具为 Write / Edit / MultiEdit，目标文件为 `plan.md` 或 `plan.meta.json`
-- **检查**：主编排者角色 + **Plan Agent 都不可用** (`codex whoami` 失败 + `reasonix --version` 失败)
-- **拒绝** → `正式计划必须由 plan agent 生成。主编排者只能生成 plan-input.md、REQUIREMENTS.md、CODE_CONTEXT.md、DECISIONS.md。如 Codex 和 Reasonix 都不可用, 主编排者必须先在 PLAN.md 顶部写明 "由主编排者直接编写, 因为 [Codex 限流 / Reasonix 不可用]"`
-- **允许**：主编排者调用 `run-codex-plan.ps1` / `reasonix run` / `agent_dispatcher plan --planner codex --input <plan-input.md> --output <plan.md>`
+- **检查**：正式计划必须由计划代理生成；主编排者只能生成 `plan-input.md`、`REQUIREMENTS.md`、`CODE_CONTEXT.md`、`DECISIONS.md`
+- **拒绝** → `正式计划必须由 plan agent 生成。默认计划代理：DeepSeek V4 Pro；OpenCode + oh-my-openagent 可用 hyperplan / 项目包装层 run-opencode-plan。主编排者不得直接写 PLAN.md。`
+- **允许**：主编排者调用 DeepSeek V4 Pro planner、Codex review、`run-opencode-plan` / `run-omo-plan` / OMO `hyperplan`，但这些入口必须写出运行目录、`status.json` 和日志路径。
 
-#### Plan Agent Fallback 顺序
+#### Plan / Review Agent 路由
 
-**主路径**：Codex (`run-codex-plan.ps1`)  
-**Fallback 1**：Reasonix (`reasonix run -m deepseek-v4-pro --no-config`)  
-**Fallback 2 (最后手段)**：主编排者直接写, **必须** PLAN.md 顶部声明 fallback 原因
+**默认计划**：DeepSeek V4 Pro planner。  
+**默认二次计划审查**：Codex reviewer；`PLAN.md` 生成后优先调用 Codex 输出 `PLAN_REVIEW.md`。Codex CLI 只能复用 Codex 自己的会话 / resume；跨 Claude/Codex/OpenCode 时通过文件交接。  
+**Codex 额度不足**：不阻塞当前开发；必须记录 `CODEX_STATUS.json` 与 `DEFERRED_CODEX_REVIEW.md`，并标记 `plan_review_status = deferred_due_to_codex_quota`，便于额度刷新后补跑。  
+**GPT 增强**：只在有额度时启用，用于更高风险的计划复核、关键代码审查、复杂 bug 二次判断和最终兜底；不是必经流程。  
+**DeepSeek 计划入口不可用**：进入 `blocked`，原因 `NO_PLAN_AGENT_AVAILABLE`。禁止主编排者直接写正式 PLAN.md 或放行开发。
 
-### Gate 3：没有验证报告禁止完成/提交/合并/发布
+### Gate 3：没有最终验证报告禁止完成/合并/发布
 
-- **触发**：Bash 命令包含 `git commit` / `git merge` / `git push` / `release` / `assembleRelease` / `publish`，或修改 STATE.json 为 `done`
+- **触发**：Bash 命令包含 `git merge` / `git push` / `release` / `assembleRelease` / `publish`，或修改 STATE.json 为 `done`
+- **不触发普通 step commit**：`commit_step_gate` 要求每个原子修改及时 `git commit`，普通 step commit 只需要对应阶段的局部验证；不得被最终验证报告门禁阻断。
 - **检查**：
   - `verification-report.md` 存在
   - `VERIFIED_COMMIT` 存在
@@ -79,24 +84,24 @@
 - **拒绝** → `这是只读产物文件。主编排者不得覆盖。由原责任代理维护。`
 - **允许**：记录文件路径 + 1~3 句话摘要 + 风险 + 下一代理 + 下一输入文件
 
-### Task Gate：`.ai/tasks` 模式下缺计划时禁止绕过 Codex planner
+### Task Gate：`.ai/tasks` 模式下缺计划或缺二次计划审查时禁止绕过
 
 - **触发**：guard 自动发现 `.ai/tasks/<TASK-ID>/STATUS.md` 为当前活跃任务，且该任务缺少 `PLAN.md`
 - **拒绝 1**：任何 `Agent` / `SendMessage` 工具调用
-  - **原因**：禁止拿后台子任务代替 Codex B planner
+  - **原因**：禁止拿普通后台子任务代替正式计划代理或二次审查代理
 - **拒绝 2**：任何非只读 `Bash` 命令
-  - **允许**：显式运行 `run-codex-plan.ps1`；以及 `rg` / `Get-Content` / `git status` 等只读检查
+  - **允许**：显式运行 DeepSeek V4 Pro plan/review wrapper、`run-opencode-plan`、`run-omo-plan`、`hyperplan`；以及 `rg` / `Get-Content` / `git status` 等只读检查
 - **拒绝 3**：任何源码 `Write` / `Edit` / `MultiEdit`
-  - **原因**：当前任务还没有 Codex 生成的计划，不能进入开发
+  - **原因**：当前任务还没有计划代理生成的 PLAN.md 或没有通过二次计划审查，不能进入开发
 
-这层门禁的目标不是替代完整状态机，而是防止主编排者在 `.ai/tasks` 模式下”口头承认漏了 Codex 计划，却继续靠后台 Agent 或其他命令往前走”。
+这层门禁的目标不是替代完整状态机，而是防止主编排者在 `.ai/tasks` 模式下口头承认漏了计划/审查，却继续靠后台 Agent 或其他命令往前走。
 
 ### Gate 5: 工作树卫生门禁 (working_tree_hygiene)
 
 **目的**：防止 Agent 在 working tree 累积未提交改动导致 linter/编辑器/session 中断时全丢（实测 100+ 行代码丢失事件）。
 
 - **触发**：
-  - Agent 报告”完成” / “已 commit” / “可验收”
+  - Agent 报告"完成" / "已 commit" / "可验收"
   - 用户切到新 Agent 接手前
   - 任何 `Bash` 命令包含 `git commit` / `git push` / `git merge`
   - Agent 退出 / session 切换
@@ -113,12 +118,12 @@
      B) 如果是 pre-existing 改动: 通知用户决定（不要自动 commit）
      C) 如果是误改: git restore <file> 或 git clean -fd
      ```
-  3. 阻断”完成”声明，要求先 commit 或 revert
+  3. 阻断"完成"声明，要求先 commit 或 revert
 - **允许**：
   - 只读 `git status` / `git log` / `git diff` 检查
   - `git add` + `git commit`（前提是精确指定文件，不用 `.` 或 `-A`）
   - `git restore <file>` 撤销错误改动
-- **失败行为**：阻断 commit、阻断”完成”声明、阻断 Agent 退出
+- **失败行为**：阻断 commit、阻断"完成"声明、阻断 Agent 退出
 
 ---
 
@@ -147,14 +152,16 @@
 
 | 钩子 | 触发时机 | 规则 |
 |---|---|---|
-| `plan_must_be_codex` | CATEGORY_PLANNING 阶段 | 主编排者禁止自己写 PLAN.md，必须调用 Codex 子代理。Gate 2 提供系统级兜底。 |
-| `codex_output_visible` | Codex 子代理返回 | Codex 输出必须展示在主编排者输出中，至少展示 STATUS/SUMMARY/CONFIDENCE/RISK。 |
-| `codex_runtime_visible` | 启动 Codex plan/review/implement 脚本 | 启动后必须立刻产出 `status.json` + stdout/stderr 日志路径；超过 600 秒无活动必须标记 `silent`，达到脚本上限必须标记 `timed_out`。 |
+| `plan_must_be_agent` | CATEGORY_PLANNING 阶段 | 主编排者禁止自己写 PLAN.md，默认调用 DeepSeek V4 Pro planner 或 OpenCode/OMO hyperplan。Gate 2 提供系统级兜底。 |
+| `plan_review_must_pass` | PLAN.md 生成后、开发前 | 所有 auto-dev 任务必须二次计划审查。无 `PLAN_REVIEW.md` 或 `plan_review_status != approved` 时禁止进入开发。 |
+| `planner_output_visible` | 计划代理返回 | DeepSeek/OpenCode/OMO/可选 GPT 输出必须展示在主编排者输出中，至少展示 STATUS/SUMMARY/CONFIDENCE/RISK。 |
+| `agent_runtime_visible` | 启动 DeepSeek/OpenCode/OMO/可选 GPT plan/review/implement 脚本 | 启动后必须立刻产出 `status.json` + stdout/stderr 日志路径；超过 600 秒无活动必须标记 `silent`，达到脚本上限必须标记 `timed_out`。 |
 | `stage_entry_check` | 进入新阶段 | 检查前置产物齐全，缺失则禁止进入。 |
-| `pre_commit_gate` | git commit 前 | 检查 VERIFICATION_REPORT 存在且通过。Gate 3 提供系统级兜底。 |
+| `pre_commit_gate` | 最终合并/发布/标记 done 前 | 检查 VERIFICATION_REPORT 存在且通过。普通 step commit 由 `commit_step_gate` + Gate 5 约束。 |
 | `max_retry_gate` | 第 3 次相似修复 | 强制升级假设/模型/会话。 |
 | `parallel_safety_check` | 启动并行类别 | 检查依赖图无冲突。 |
 | `post_task_reflection` | 任务完成 | 写 AUTO_DEV_LEARNINGS.md。 |
+| `raw_outputs_must_be_preserved` | 任一角色生成文档/报告/审查 | 禁止覆盖原始输出；修订只能新增 v2/round2/patch/resolution/superseded 文件。 |
 
 ---
 
@@ -200,7 +207,7 @@
 }
 ```
 
-> `--orchestrator=codex|reasonix` 模式使用 `.collab-work` 替代 `.ai-work`。
+> `--orchestrator=codex` 可使用 `.collab-work` 替代 `.ai-work`；`--orchestrator=opencode` 可使用 `.omo/auto-dev-work`，但建议仍保留 `.ai-work` 兼容旧脚本。
 > **guard 自动跳过**：只有在旧 `.ai-work/STATE.json` 活跃，或自动发现 `.ai/tasks` 活跃任务时才应用门禁；普通会话不受影响。
 
 ---
@@ -213,48 +220,17 @@
 
 ---
 
-## 八、Reasonix 钩子方案
+## 八、OpenCode / oh-my-openagent 钩子方案
 
-Reasonix 目前没有原生 PreToolUse hook 系统。在 Reasonix 中通过以下方式实现同等门禁：
+OpenCode + oh-my-openagent 的核心不是 Claude Code Skill 入口，而是项目级规则注入与生命周期 hooks：
 
-### 方式 1：Prompt 层强制（已内置）
+1. **规则注入**：把本 Skill 的核心规则写入项目根 `AGENTS.md` 和 `.omo/rules/auto-dev.md`。OMO 的 rules injection 会在每次 prompt 自动加载这些规则。
+2. **计划入口**：复杂任务先用 DeepSeek V4 Pro `hyperplan` / `run-opencode-plan` 产出类别计划，再在 `PLAN_REVIEW` 节点优先调用 Codex 审查；Codex 无额度时记录延期审查。不要直接让 `ultrawork` 从需求跳到改代码。
+3. **Team Mode**：允许最多 5 个低耦合类别并行；MiniMax / OpenCode 额度充足时可开到 5 路，但不得强行凑满。共享核心状态、数据库、关键文件、后台服务或跨日/时间逻辑时必须降到 1–2 路。
+4. **验证门禁**：OpenCode hooks 如果不能系统级阻断，至少在规则中强制每次声称完成前输出 `git status --short`、验证命令、exit code 和结果文件。
+5. **冲突优先级**：项目安全规则 > 本 Skill 流程 > OMO 默认自动推进。`ultrawork` 不能绕过计划、测试、commit hygiene 和最终验证。
 
-SKILL_CORE.md 第 8 节列出了全部 4 个 System 层门禁规则。在 Reasonix 中，这些规则作为**不可跳过的强制指令**嵌入 SKILL.md 提示词。主编排者在每次工具调用前必须在思考中自检：
-
-```
-自检清单（每次 Write/Edit/MultiEdit 前）：
-□ 目标路径是否在 app/src/lib/core/packages 下？
-  → 是 → current_phase 必须是 development/fixing/testing？
-  → 是 → plan_status 必须是 approved？
-□ 目标文件是否是 plan.md / plan.meta.json？
-  → 是 → 主编排者禁止直接写，必须调用 Codex 子代理
-```
-
-### 方式 2：通过 `auto_dev_guard.py` 手动调用
-
-在 Reasonix 会话中，主编排者可以在关键操作前手动运行 guard：
-
-```bash
-echo '{"tool_name":"Edit","file_path":"src/main.py"}' | python scripts/auto_dev_guard.py pretooluse .ai-work
-```
-
-返回 `{"decision": "deny", ...}` 则禁止操作。
-
-### 方式 3：未来 — Reasonix 原生 Hook
-
-如果 Reasonix 后续支持 hooks，可以在 `~/.reasonix/config.json` 中配置：
-
-```json
-{
-  "hooks": {
-    "PreToolUse": [
-      {
-        "command": "python \"G:\\ai-toolkit\\skills\\_shared\\scripts\\auto_dev_guard.py\" pretooluse \"{PROJECT_DIR}\\.ai-work\""
-      }
-    ]
-  }
-}
-```
+推荐 `.omo/rules/auto-dev.md` 内容见本打包目录的 `opencode-omo-bridge/.omo/rules/auto-dev.md`。
 
 ## 九、其他 Skill 的钩子扩展
 
@@ -265,9 +241,9 @@ echo '{"tool_name":"Edit","file_path":"src/main.py"}' | python scripts/auto_dev_
 3. 在 Claude Code hooks 配置中添加对应的 PreToolUse 规则
 4. 自定义 SOURCE_DIRS / RESTRICTED_COMMANDS 等常量以匹配 Skill 需求
 
-## 十、Codex 启动脚本约定
+## 十、计划代理启动脚本约定
 
-以下规则不是 Claude 原生 hook 阻断，而是所有 Codex 启动脚本必须满足的运行约定：
+以下规则不是 Claude 原生 hook 阻断，而是所有 DeepSeek / OpenCode / OMO / 可选 GPT 启动脚本必须满足的运行约定：
 
 1. 每次运行 plan / review / implement，都要创建独立运行目录。
 2. 运行目录中至少包含：

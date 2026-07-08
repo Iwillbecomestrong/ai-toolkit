@@ -53,7 +53,7 @@ NEXT_INPUT: <path or NONE>
 
 ### `PLAN.md`
 
-计划代理（Codex 子代理）生成。开发代理首次进入、计划实质变化或新会话接手时，必须完整阅读，不得用摘要替代。（`plan_must_be_codex` 钩子强制执行）
+计划代理（DeepSeek V4 Pro planner / OpenCode-OMO hyperplan）生成。开发代理首次进入、计划实质变化或新会话接手时，必须完整阅读，不得用摘要替代。（`plan_must_be_agent` 钩子强制执行）
 
 ### `STATUS.md`
 

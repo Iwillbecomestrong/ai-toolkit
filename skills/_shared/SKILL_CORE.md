@@ -1,6 +1,6 @@
 # Shared Core — auto-dev / multi-agent-core
 
-本文件是 auto-dev 和 multi-agent-core 的共享核心。两个 Skill 各自保留编排后端特有逻辑，通用规则、钩子、工作流均定义于此。
+本文件是 auto-dev 和 multi-agent-core 的共享核心。两个 Skill 各自保留编排后端特有逻辑，通用规则、钩子、工作流均定义于此。OpenCode + oh-my-openagent 场景下，本文件也是生成 `AGENTS.md` / `.omo/rules/auto-dev.md` 的规则源。
 
 > **注意**：本文件不独立作为 Skill 使用，它被 auto-dev 和 multi-agent-core 的 SKILL.md 引用。
 
@@ -28,7 +28,7 @@
 | 触发场景 | 原因 | 解除条件 |
 |---|---|---|
 | 用户主动说"先暂停/先做别的" | 用户有其他事 | 用户说"恢复 / 继续" |
-| 关键依赖不可用（Codex + Reasonix 都不可用，且主编排被禁止直接写 PLAN） | 没有 plan agent | 主编排 override + 用户确认 |
+| 关键依赖不可用（DeepSeek V4 Pro 计划入口不可用，且主编排被禁止直接写 PLAN） | 没有 plan agent | 恢复计划入口，或用户明确缩小范围后重新启动 |
 | 关键依赖不可用（真机/模拟器不可用，验证无法进行） | 缺测试环境 | 设备/AVD 就绪 |
 | 真机验收中用户挂断/出门/回复"晚点再说" | 等用户回来 | 用户回来确认 |
 | 同一类别编译/测试反复失败 ≥ 3 次 | 不可稳定收敛 | 标 `blocked`, 提示降级方案或拆类别 |
@@ -65,9 +65,11 @@
 
 | 钩子 | 触发时机 | 规则 |
 |---|---|---|
-| `plan_must_be_codex` | 需要生成 PLAN.md | **主编排者禁止自己写 PLAN.md**。必须按当前项目包装层规定启动 Codex planner；如果项目提供 `run-codex-plan.ps1`，则必须走该脚本，禁止用后台 Agent 替代。主编排者只能 review、修正边界条件、批准。 |
-| `codex_output_visible` | Codex 子代理返回 | Codex 输出必须**完整展示**在主编排者的输出中。关键日志、结果摘要、错误信息一律不得静默丢弃。 |
-| `codex_runtime_visible` | 启动 Codex plan/review/implement 脚本 | 脚本必须立刻产出 `status.json`、stdout/stderr 日志路径、最后活动时间、静默秒数和超时状态。主编排者不得盲等。 |
+| `plan_must_be_agent` | 需要生成 PLAN.md | **主编排者禁止自己写正式 PLAN.md**。默认由 DeepSeek V4 Pro planner 生成；OpenCode + oh-my-openagent 可用 `hyperplan` / plan wrapper 承载。主编排者只能写 `plan-input.md`、review、修正边界条件、批准。 |
+| `planner_output_visible` | DeepSeek / OpenCode / OMO 计划代理返回 | 计划代理输出必须**完整展示**在主编排者的输出中。关键日志、结果摘要、错误信息一律不得静默丢弃。 |
+| `plan_review_or_defer` | PLAN.md 生成后、进入开发前 | 优先调用 Codex/GPT 做二次计划审查：第一轮 GPT-5.4，第二轮复审/升级审查 GPT-5.5。可用时必须保留 `PLAN_REVIEW.round1.gpt-5.4.md` / `PLAN_REVIEW.round2.gpt-5.5.md` 原始输出；无额度时必须有 `DEFERRED_CODEX_REVIEW.md` 且 `plan_review_status = deferred_due_to_quota`。 |
+| `raw_outputs_must_be_preserved` | 任一角色产出文档/审查/报告后 | Planner、reviewer、developer、tester、rescue 的原始输出禁止覆盖。修订只能新增 `v2`、`round2`、`patch`、`resolution` 或 `superseded` 文件；当前入口文件必须可追溯到原始版本。 |
+| `agent_runtime_visible` | 启动 Codex / OpenCode / OMO plan/review/implement 脚本 | 脚本或运行目录必须立刻产出 `status.json`、stdout/stderr 日志路径、最后活动时间、静默秒数和超时状态。主编排者不得盲等。 |
 | `stage_entry_check` | 进入新阶段 | 检查前置阶段产物文件是否存在且非空。缺失则禁止进入。 |
 | `pre_commit_gate` | 提交代码前 | 检查 VERIFICATION_REPORT 存在、测试通过、无未关闭的 BLOCKER 级 issue。 |
 | `max_retry_gate` | 第 3 次相似修复 | 同一问题同一方案最多 2 轮。第 3 次必须升级假设、模型或会话。 |
@@ -83,9 +85,9 @@
 3. 如果钩子未通过 → 停止，先满足钩子条件
 4. 钩子通过 → 继续
 
-### Codex 运行可观测性约定
+### 计划/执行代理运行可观测性约定
 
-凡是由脚本启动的 Codex plan / review / implement，都必须满足以下约定：
+凡是由脚本启动的 DeepSeek / OpenCode / oh-my-openagent / 可选 GPT plan / review / implement，都必须满足以下约定：
 
 1. 启动即写出 `status.json`，至少包含：
    - `status`
@@ -103,7 +105,7 @@
 3. 禁止静默等待：
    - 超过 600 秒无活动 → 状态必须标成 `silent`
    - 达到脚本定义的最大运行时长 → 状态必须标成 `timed_out`
-4. 若状态变成 `silent` 或 `timed_out`，主编排者必须汇报卡住位置、日志路径和下一步处理，不能只说“还在跑”。
+4. 若状态变成 `silent` 或 `timed_out`，主编排者必须汇报卡住位置、日志路径和下一步处理，不能只说"还在跑"。
 
 ## 4. 阶段路由
 
@@ -122,27 +124,116 @@
 
 - `WORKFLOW.md`
 - `ROUTING.md`
+- `MODEL_ROUTING.md`
 - `REPORT_FORMATS.md`
 
 ## 5. 核心约束
 
 1. 先澄清、调研、分类，再规划和开发。
 2. 机械性搜索、目录扫描、调用链整理优先交给调研代理；主编排负责判断事实和作出决策。
-3. 最多并行 3 个类别，但不能强行凑满；先画依赖图，再决定 wave。
-4. 每个并行类别必须独立 worktree、branch、责任身份和提交。
-5. 谁开发谁修改，谁发现问题谁验证到关闭；固定的是**责任身份**，不是单一聊天会话。
-6. 原会话优先恢复；必要时可换新会话或升级模型，但新会话必须重新读文件证据。
-7. 开发或测试首次进入类别、计划实质变化或新会话接手时，必须完整阅读：
+3. 最多并行 5 个类别，但不能强行凑满；先画依赖图，再按耦合度、模型额度、验证压力动态决定 wave。默认建议 1–5 路。**同类串行，不同类并行**：只有低耦合的不同类别才允许同批并行。
+4. 每个类别是一条生产线：`PLAN -> PLAN_REVIEW -> PLAN_REVIEW_RESOLUTION(if needed) -> TEST_TARGET -> IMPLEMENT -> TEST -> CODE_REVIEW -> ACCEPTANCE`。`PLAN.md` 生成后优先由 Codex 做二次计划审查；是否复用会话取决于执行框架，同框架/返工可复用，跨框架用文件交接。`plan_status = approved` 且（`plan_review_status = approved` 或 `deferred_due_to_codex_quota`）后才能进入开发。Codex/GPT 必须在对应节点介入：Codex 计划审查在 `PLAN_REVIEW`，Codex 代码审查在 `CODE_REVIEW`；无额度则记录并跳过，不阻塞默认流程。
+5. 每个并行类别必须独立 worktree、branch、责任身份和提交。
+6. **责任身份不共享对话，只复用同一责任身份的原会话**：planner、plan reviewer、developer、tester、rescue 不能在同一对话里互相切换自审。Planner 与 plan reviewer 是不同责任身份：默认 DeepSeek V4 Pro planner 负责生成/修订 PLAN；第一轮 plan reviewer 用 GPT-5.4 提出计划问题；第二轮复审/升级审查用 GPT-5.5。review 意见必须回传 planner 裁决，成立则修订 PLAN/PLAN_PATCH，不成立则写明证据。Developer 修自己的代码改动；原 reviewer/tester 回到原审查/测试会话复验，直到 issue 关闭。固定的是责任闭环，不是把所有身份塞进一个聊天窗口。
+7. **所有角色原始输出必须保留，禁止覆盖**：每一轮 PLAN、PLAN_REVIEW、PLAN_REVIEW_RESOLUTION、PLAN_PATCH、IMPLEMENTATION_REPORT、TEST_REPORT、CODE_REVIEW、RESCUE_REPORT 都必须保留原始版本。后续修改只能新增版本文件，不能把上一轮原文抹掉。
+8. 原会话优先恢复；必要时可换新会话或升级模型，但新会话必须重新读文件证据。
+9. 开发或测试首次进入类别、计划实质变化或新会话接手时，必须完整阅读：
    - `REQUIREMENTS.md`
    - `CODE_CONTEXT.md`
    - `DECISIONS.md`
    - `PLAN.md`
+   - `PLAN_REVIEW.md`
    - 当前开放问题与 `HANDOFF.md`
-8. 不能用摘要替代完整计划阅读。
-9. 公共接口、数据结构、状态机基础、迁移、高权限、跨日/时间、后台恢复等节点完成后，必须先做关键中途检查。
-10. **测试先行**：凡是可测试的需求，类别开发阶段必须先写测试再写实现。测试即"靶"——先定义"怎样算通过"，再射箭。避免实现完再补测试（射箭后描靶）。PLAN.md 的验收标准必须可被自动化检验，不能只是文字描述。
-11. 同一问题最多自动两轮相似修复；第二次仍失败必须升级假设、证据、模型或会话。
-12. 完成前必须记录新鲜验证证据：`VERIFIED_COMMIT`、`VERIFICATION_COMMAND`、`VERIFICATION_TIME`、`EXIT_CODE`、`RESULT_FILE`、`DEVICE_TEST_STATUS`、`REMAINING_RISKS`。
+10. 不能用摘要替代完整计划阅读。
+11. 公共接口、数据结构、状态机基础、迁移、高权限、跨日/时间、后台恢复等节点完成后，必须先做关键中途检查。
+12. **测试先行**：凡是可测试的需求，计划阶段必须先定义测试靶子和验收命令；进入开发后必须先写失败测试、最小复现、日志断言或可执行验证脚本，再写实现。测试即"靶"——先定义"怎样算通过"，再射箭。实现完再补测试不算测试先行。PLAN.md 的验收标准必须可被自动化检验，不能只是文字描述。
+13. 同一问题最多自动两轮相似修复；第二次仍失败必须升级假设、证据、模型或会话。
+14. 完成前必须记录新鲜验证证据：`VERIFIED_COMMIT`、`VERIFICATION_COMMAND`、`VERIFICATION_TIME`、`EXIT_CODE`、`RESULT_FILE`、`PROJECT_SPECIFIC_TEST_STATUS`（可选，由包装层定义，如 Android 的 `DEVICE_TEST_STATUS`）、`REMAINING_RISKS`。
+
+### 5.1 责任身份、会话连续性与同模块追加问题
+
+本规则对 Superpowers 的"fresh subagent"做本项目适配：**同类别是一条串行生产线，始终复用同一条文件化上下文；工具会话只在同一责任身份内复用**。开发会话用于实现和返工，审查/测试会话用于发现问题和复验关闭；不同责任身份不得共用同一对话自审。
+
+
+#### 原始输出保留
+
+- 每个责任身份的原始输出都是后续调查、复盘、第二轮计划和返工归因的证据，禁止覆盖。
+- 推荐命名：`PLAN.v1.md`、`PLAN_REVIEW.round1.gpt-5.4.md`、`PLAN_REVIEW.round2.gpt-5.5.md`、`PLAN_REVIEW_RESOLUTION.round1.md`、`PLAN_PATCH.v2.md`、`CODE_REVIEW.round1.gpt-5.4.md`、`CODE_REVIEW.round2.gpt-5.5.md`。
+- `PLAN.md` / `PLAN_REVIEW.md` 可以作为当前入口或索引，但必须写明指向哪个原始版本，不能只保留改写后的最终稿。
+
+#### 会话复用边界
+
+- 文件化上下文永远复用：`PLAN.md`、`PLAN_REVIEW.md`、`HANDOFF.md`、`FOLLOWUP-<n>.md`、commit 和测试报告是跨代理共同记忆。
+- 工具会话不跨框架复用：Claude、Codex CLI、OpenCode/OMO 是不同运行框架，不能假设共享同一个聊天上下文。
+- 当前回合的 `PLAN` 和 `PLAN_REVIEW` 若分别由不同框架执行，只能通过文件交接；不得写成"复用同一会话"。
+- 用户实测反馈、同模块追加问题、二次计划修订、多次救火，若仍在原类别内，优先回到对应的原责任会话继续：原 developer 修，原 reviewer/tester 复验，原 planner 接收 Codex PLAN_REVIEW，裁决意见是否成立，并修订 PLAN/PLAN_PATCH。
+
+#### Plan review 回传规则
+
+`PLAN_REVIEW.md` 是 Codex plan reviewer 的审查意见，结论必须先回传 planner / 计划 owner（默认 DeepSeek V4 Pro）：
+
+- `approved`：planner 确认后进入 `TEST_TARGET`。
+- `changes_required`：planner 输出 `PLAN_REVIEW_RESOLUTION.md`，逐条接受/驳回 Codex 意见；接受项必须修订 `PLAN.md` 或 `PLAN_PATCH.md`，然后优先交原 Codex reviewer 复审。
+- `blocked`：主编排介入，判断是需求不清、调研不足、计划缺口还是模型能力不足。
+
+不得让 developer 直接根据 `PLAN_REVIEW.md` 改代码；计划问题先由 planner 消化成可执行计划，再进入测试先行和开发。
+
+#### 同类别同模块：原责任会话优先
+
+- 同一类别、同一模块、同一状态机链路的问题，默认回到对应原责任会话继续处理，不要为了形式重新开全新会话。
+- 原开发者最了解前因后果，所以开发缺陷由原 developer 修；原测试者/审查者最了解失败现象和复验路径，所以问题关闭由原发现者复验。
+- "谁开发谁修，谁发现谁验证关闭"表示责任闭环：修复和复验是两条责任线，不能让 developer 自己宣布 reviewer/tester 的问题已关闭。
+
+#### 什么时候必须独立新会话
+
+仅以下场景才优先新会话：
+
+1. 用户明确启用 skill 开始下一批需求，或显式结束/归档上一个对话。
+2. 原会话上下文明显污染，反复忽略证据或重复同一错误方案。
+3. 原责任会话不可恢复。
+4. 第 3 轮相似返工在同一生产线内换假设后仍不收敛，需要换模型或换审查视角。
+5. 跨类别合并冲突、架构级判断或高风险外部第二意见需要真正独立视角。
+
+注意：用户反馈后的二次计划修订、代码审查、多次救火本身不构成新会话理由；默认仍在同类别生产线内完成。但复用必须按责任身份发生：原 developer 返工，原 reviewer/tester 复验，原 rescue 继续同一救火线索；跨身份和跨框架只通过文件交接。
+
+#### 同模块追加问题：必须走 planner，不得直接改代码
+
+用户在实测中反馈的同模块 bug/问题，**无论看起来多简单**，都必须经过 planner：
+
+```text
+USER_REPORT_SAME_MODULE_ISSUE
+  -> append ISSUES.json
+  -> update category/FOLLOWUP-<n>.md
+  -> write plan-input.md or PLAN_PATCH.md (描述根因 + 方案)
+  -> DeepSeek V4 Pro planner 审查 / 生成修订计划
+  -> planner approved → 才允许改代码
+  -> if crosses category/interface/state-machine boundary: return to CATEGORY_DISCOVERY
+```
+
+- 即使新问题仍属于同一类别/同一模块，也**必须先写书面方案，经 planner 审查批准后再改代码**。不得因为"同模块"就直接动手。
+- `PLAN_PATCH.md` 是**强制**的，不是"必要时"才写。每次用户反馈 bug 都必须有对应的 PLAN_PATCH 或 plan-input。
+- 由 DeepSeek V4 Pro planner 做定点审查；主编排者不得自己审查自己的方案。
+- 只有当新问题跨模块、跨公共接口、影响状态机基础或改变原验收标准时，才重新分类并重新计划。
+
+#### 子代理交接粒度
+
+子代理之间允许传递**文件路径 + 简短状态**，不需要搬运全文：
+
+```text
+handoff: CAT-2 -> CAT-2 tester
+read:
+- CAT-2/PLAN.md
+- CAT-2/PLAN_REVIEW.md
+- CAT-2/IMPLEMENTATION_REPORT.md
+- commit: abc1234
+focus:
+- verify desktop -> target app relaunch lock path
+- check logs containing LockState.RestEnd
+blocked:
+- none
+```
+
+主编排只需要收到进度摘要：当前步骤、关键文件路径、commit hash、阻塞点、下一步。长文档仍以文件为准。
 
 ## 6. 状态文件
 
@@ -165,7 +256,8 @@
 ENV_CHECK
 -> REQUIREMENTS_BRAINSTORMING
 -> CODE_RESEARCH
--> CATEGORY_PLANNING   ← 此处触发 plan_must_be_codex 钩子
+-> CATEGORY_PLANNING   ← 此处触发 plan_must_be_agent 钩子
+-> PLAN_REVIEW         ← 此处触发 plan_review_or_defer 钩子
 -> CATEGORY_DEVELOPMENT
 -> TESTING_AND_ACCEPTANCE
 -> WAVE_INTEGRATION
@@ -180,14 +272,14 @@ ENV_CHECK
 
 | 门禁 | 阻断条件 |
 |---|---|
-| Gate 1 | 未批准计划时，Write/Edit/MultiEdit 到 `app/` `src/` `lib/` `core/` `packages/` |
-| Gate 2 | 主编排者直接 Write/Edit `plan.md` 或 `plan.meta.json` |
+| Gate 1 | 未批准计划，或 Codex 二次计划审查既未通过也未记录延期时，Write/Edit/MultiEdit 到 `app/` `src/` `lib/` `core/` `packages/` |
+| Gate 2 | 主编排者直接 Write/Edit `plan.md` 或 `plan.meta.json`；正式计划必须来自 DeepSeek V4 Pro / OpenCode/OMO 计划代理 |
 | Gate 3 | 无 `verification-report.md` 时执行 `git commit/merge/push` 或改 STATE 为 done |
 | Gate 4 | Write/Edit 到 `plan.md` `implementation.md` `test-report.md` `review.md` 等长文档 |
 
 **主编排者可以做的事**（不受阻断）：
 - 生成 `REQUIREMENTS.md`、`CODE_CONTEXT.md`、`DECISIONS.md`、`plan-input.md`
-- 调用当前项目允许的 Codex planner 入口；若项目包装层提供 `run-codex-plan.ps1`，则必须使用该脚本并保持前台可见
+- 调用当前项目允许的计划 / 审查代理入口；默认使用 DeepSeek V4 Pro planner + Codex reviewer，OpenCode/OMO 路线使用 `hyperplan` / `run-opencode-plan` / `run-omo-plan` 等包装层，并保持运行可观测
 - 更新 `STATE.json` 的阶段和状态字段
 - 记录文件路径 + 摘要，不搬运全文
 
@@ -200,10 +292,13 @@ ENV_CHECK
   "task_id": "",
   "current_phase": "intake",
   "orchestrator": "",
-  "planner_owner": "codex-planner",
+  "planner_owner": "deepseek-v4-pro-planner | opencode-omo-planner",
   "plan_status": "pending",
   "plan_file": "",
   "plan_meta_file": "",
+  "plan_reviewer": "codex-plan-reviewer | deferred_due_to_codex_quota | gpt-optional-enhancement",
+  "plan_review_status": "pending",
+  "plan_review_file": "",
   "current_category": "",
   "current_wave": 0,
   "allowed_next_actions": [],
@@ -217,7 +312,18 @@ ENV_CHECK
 
 阶段枚举：`intake` → `research` → `planning` → `plan_review` → `development` → `testing` → `acceptance` → `fixing` → `integration` → `verification` → `done` → `blocked`
 
-## 10. Skill 版本管理
+
+## 10. OpenCode / oh-my-openagent 桥接规则
+
+当用户主要使用 OpenCode 且 oh-my-openagent 固定启用时，本 Skill 不再假设 Claude Code 的 Skill 入口一定会被触发。此时必须把核心规则下沉为项目级规则：
+
+1. 项目根 `AGENTS.md`：写短规则，要求任何开发任务先读 `.omo/rules/auto-dev.md`。
+2. `.omo/rules/auto-dev.md`：放本文件、`WORKFLOW.md`、`HOOKS.md` 的精简版规则。
+3. OpenCode/OMO 执行时，仍保留本 Skill 的长处：Research First、主编排亲自分类、每类独立计划、受控并行、测试先行、工作树卫生、验证证据。
+4. OMO 的强项用于运行时：rules injection、Team Mode、LSP、AST-Grep、background agents、DeepSeek V4 Pro `hyperplan` 计划；Codex 做二次审查、`ulw-loop` 持久循环。
+5. 两者冲突时：以项目级安全门禁优先；不得因为 `ultrawork` 自动推进而跳过计划、测试、commit hygiene、final verification。
+
+## 11. Skill 版本管理
 
 本 Skill 受 Git worktree 版本管理。修改 Skill 前必须阅读 `SKILL_VERSIONING.md`。
 

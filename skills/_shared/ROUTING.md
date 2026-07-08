@@ -29,7 +29,7 @@
 如果第一次返工不通过，主编排必须先归因，再决定升级谁：
 
 - **researcher 问题**：先恢复原 researcher 补充；仍不足则第二调研代理交叉验证；再不行由主编排直读关键代码
-- **plan 问题**：让 Codex 子代理重写计划（触发 `plan_must_be_codex`），提供更具体的反馈
+- **plan 问题**：让 DeepSeek V4 Pro planner 修订计划（触发 `plan_must_be_agent`），提供更具体的反馈；修订后交 Codex 复审
 - **developer 问题**：升级开发者模型（flash → pro），或换子会话
 - **tester 问题**：确认测试逻辑；若 tester 能力不足，由 pro developer 做验收补充
 - **编排者自身能力不足**：升级模型或通过标记升级
