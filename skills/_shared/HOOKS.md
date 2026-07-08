@@ -50,9 +50,15 @@
 ### Gate 2：主编排者不能直接写正式计划
 
 - **触发**：工具为 Write / Edit / MultiEdit，目标文件为 `plan.md` 或 `plan.meta.json`
-- **检查**：主编排者角色
-- **拒绝** → `正式计划必须由 planner_owner 指定的计划代理生成。主编排者只能生成 plan-input.md、REQUIREMENTS.md、CODE_CONTEXT.md、DECISIONS.md。`
-- **允许**：主编排者调用 `agent_dispatcher plan --planner codex --input <plan-input.md> --output <plan.md>`
+- **检查**：主编排者角色 + **Plan Agent 都不可用** (`codex whoami` 失败 + `reasonix --version` 失败)
+- **拒绝** → `正式计划必须由 plan agent 生成。主编排者只能生成 plan-input.md、REQUIREMENTS.md、CODE_CONTEXT.md、DECISIONS.md。如 Codex 和 Reasonix 都不可用, 主编排者必须先在 PLAN.md 顶部写明 "由主编排者直接编写, 因为 [Codex 限流 / Reasonix 不可用]"`
+- **允许**：主编排者调用 `run-codex-plan.ps1` / `reasonix run` / `agent_dispatcher plan --planner codex --input <plan-input.md> --output <plan.md>`
+
+#### Plan Agent Fallback 顺序
+
+**主路径**：Codex (`run-codex-plan.ps1`)  
+**Fallback 1**：Reasonix (`reasonix run -m deepseek-v4-pro --no-config`)  
+**Fallback 2 (最后手段)**：主编排者直接写, **必须** PLAN.md 顶部声明 fallback 原因
 
 ### Gate 3：没有验证报告禁止完成/提交/合并/发布
 
