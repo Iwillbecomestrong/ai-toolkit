@@ -83,16 +83,17 @@ find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
 无论用户发来什么消息，在回复之前必须先执行：
 
 1. **读取 `.ai-work/STATE.json`**
-2. 根据 `current_phase` 和消息类型判断处理：
+2. 根据 `global_state` + `current_pipeline` 的 `state` 和消息类型判断处理 (V3_1_6 适配):
 
-   | `current_phase` | 收到的消息 | 处理 |
-   |---|---|---|
-   | `done` | 纯文字 | 正常聊天回复 |
-   | `done` | `/auto-code-android-dev` 触发 | **新任务**：从 ENV_CHECK 开始 |
-   | `blocked` | 任何消息 | **必须询问用户**："上一任务仍在 blocked。先收尾还是开新任务？" |
-   | 其它（非 done/blocked） | **用户反馈 bug/问题/没改好** | ⛔ **禁止直接改代码**。回退到 `planning`，写 `plan-input.md` / `PLAN_PATCH.md`，交 DeepSeek V4 Pro planner 审查，批准后再改 |
-   | 其它 | 纯文字补充（非 bug 反馈） | **流程内补充输入**：融入当前阶段，**不得**重新开始 |
-   | 其它（非 done/blocked） | `/auto-code-android-dev` 触发 | **必须询问用户**："上一任务在 X 阶段。先收尾还是开新任务？" |
+   | `global_state` | pipeline state | 收到的消息 | 处理 |
+   |---|---|---|---|
+   | `active` | `已完成` | 纯文字 | 正常聊天回复 |
+   | `active` | `已完成` | `/auto-code-android-dev` 触发 | **新任务**：从 ENV_CHECK 开始 |
+   | `blocked` | 任意 | 任何消息 | 报告阻塞原因，等用户指令（主编排仍能接收输入） |
+   | `active` | 任意 (非 `已完成`/`暂停`) | **用户反馈 bug/问题/没改好** | ⛔ **禁止直接改代码**。回退 pipeline 到 `计划` 状态，写 `plan-input.md` / `PLAN_PATCH.md`，交 DeepSeek V4 Pro planner 审查，批准后再走 `计划 → 测试靶 → 开发` |
+   | `active` | 任意 (非 `已完成`/`暂停`) | 纯文字补充（非 bug 反馈） | **流程内补充输入**：融入当前阶段，**不得**重新开始 |
+   | `active` | `暂停` | 用户说"恢复" | 回到 `previous_state` 继续 |
+   | `active` | 任意 (非 `已完成`) | `/auto-code-android-dev` 触发 | **必须询问用户**："上一任务在 X pipeline 的 Y 阶段。先收尾还是开新任务？" |
 
 3. 若 STATE.json 不存在：这是首次调用，从 ENV_CHECK 开始
 4. **不得自行判断**任务结束或开始新任务
@@ -112,10 +113,10 @@ find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
 
 ### `blocked` 状态处理
 
-`current_phase = blocked` 表示任务暂停等待外部条件。主编排 **不得自行 unblock**。
+`global_state = blocked` 表示任务暂停等待外部条件。主编排 **不得自行 unblock**。注意: per-pipeline `暂停` 不等于 `global_state = blocked`, 单 pipeline 暂停时其他 pipeline 仍推进。
 
 进入条件（参考 `../_shared/SKILL_CORE.md` §2.1）：
-- 用户主动说"先暂停/先做别的"（v3 当前就是这个情况）
+- 用户主动说"先暂停/先做别的"（且所有 pipeline 都暂停）
 - 关键依赖不可用（DeepSeek V4 Pro 计划入口不可用）
 - 真机验收中用户挂断/出门
 - 同一类别编译/测试反复失败 ≥ 3 次
@@ -123,11 +124,11 @@ find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
 - Plan Agent 反复 PLAN_GAP 2 次以上
 
 进入 blocked 时：
-1. STATE.json 加 `block_reason` 字段
+1. STATE.json top-level `global_state = blocked`, 加 `blocked_reason` 字段
 2. 写 `.ai-work/runs/<task>/BLOCKED.md` 记录原因
 3. 报告用户
 
-解除 blocked：仅用户明确指令时执行
+解除 blocked：仅用户明确指令时执行；`global_state` 回到 active, pipeline 从 `previous_state` 继续
 
 
 ## Android 默认模型路由

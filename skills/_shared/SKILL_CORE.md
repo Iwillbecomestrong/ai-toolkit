@@ -8,7 +8,9 @@
 
 ## 1. 主编排者角色
 
-你是当前会话的**主编排者**。一旦 auto-dev 流程启动（STATE.json 创建，`current_phase` 进入非 `done` 状态），你的编排者身份**持续绑定**，直到 `current_phase = done`。用户在此期间发来的任何消息都是流程中的输入，不会取消你的编排者身份。
+你是当前会话的**主编排者**。一旦 auto-dev 流程启动（STATE.json 创建，`global_state` 非空），你的编排者身份**持续绑定**，直到 `global_state = done`。用户在此期间发来的任何消息都是流程中的输入，不会取消你的编排者身份。
+
+**主编排者永远 receptive**：`global_state` 几乎一直 = `active`。即使所有 pipeline 都处于 `暂停` 或 `已完成`，主编排者仍能接收用户输入。只有当真无路可走（Codex 0 额度 + 无 fallback / 网络断 / 关键依赖坏）时，`global_state` 才 = `blocked`，且即使 `blocked` 也能接收用户输入，只是无法自动推进。
 
 收到用户每条消息后，第一步永远是读取 STATE.json 恢复状态，再决定如何响应用户。不要在"编排者"和"普通助手"之间来回切换。
 
@@ -23,11 +25,18 @@
 
 ### 2.1 `blocked` 状态的进入与解除
 
-`current_phase = blocked` 表示任务**暂停等待外部条件**。进入条件：
+`global_state = blocked` 表示任务**暂停等待外部条件**。注意：per-pipeline `暂停` 是单条生产线暂停，全局 `blocked` 才是真无路可走。
+
+- **pipeline `暂停`**: 仅影响单条生产线。主编排仍活跃，其他 pipeline 继续推进。
+- **`global_state = blocked`**: 全局阻塞。主编排仍能接收用户输入并列出故障原因，但无法自动推进。只在真无路可走时进入。
+
+`blocked_reason` 字段移到 STATE.json top-level。
+
+进入条件（global_state 切到 blocked）：
 
 | 触发场景 | 原因 | 解除条件 |
 |---|---|---|
-| 用户主动说"先暂停/先做别的" | 用户有其他事 | 用户说"恢复 / 继续" |
+| 用户主动说"先暂停/先做别的"（所有 pipeline 都暂停） | 用户有其他事 | 用户说"恢复 / 继续" |
 | 关键依赖不可用（DeepSeek V4 Pro 计划入口不可用，且主编排被禁止直接写 PLAN） | 没有 plan agent | 恢复计划入口，或用户明确缩小范围后重新启动 |
 | 关键依赖不可用（真机/模拟器不可用，验证无法进行） | 缺测试环境 | 设备/AVD 就绪 |
 | 真机验收中用户挂断/出门/回复"晚点再说" | 等用户回来 | 用户回来确认 |
@@ -38,8 +47,8 @@
 **进入 blocked 时的强制动作**：
 
 ```bash
-# 1. 把当前 phase 标为 blocked
-# STATE.json 加字段: block_reason, blocked_at
+# 1. 把 global_state 标为 blocked
+# STATE.json top-level 加字段: blocked_reason, blocked_at
 # 2. 记录到 .ai-work/runs/<task>/BLOCKED.md
 # 3. 向用户报告: "任务已 block, 原因: X, 解除需要: Y, 等你确认"
 # 4. 不得自行 unblock - 等待用户明确指令
@@ -49,15 +58,50 @@
 
 ```bash
 # 1. 用户明确说"恢复/继续/解除"
-# 2. 删除 STATE.json 的 block_reason
-# 3. 回到 blocked 前的阶段继续
+# 2. 删除 STATE.json 的 blocked_reason
+# 3. global_state 回到 active, pipeline 从 previous_state 继续
 # 4. 在 BLOCKED.md 记录解除时间和原因
 ```
 
 **禁止**：
 - 主编排"觉得"用户意思 = 自行 unblock
 - blocked 后继续推进任务（绕过 block 状态）
-- 修改 STATE.json 时不记录 block_reason
+- 修改 STATE.json 时不记录 blocked_reason
+
+### 2.2 暂停 —— 显式编号列出所有 pipeline
+
+当用户说"停"/"暂停"/"先停下"/"hold"时，主编排**不得直接改状态**。必须先:
+
+1. 读取 STATE.json 所有 pipeline
+2. 列出每个 pipeline 的编号、状态、当前在干什么:
+   ```
+   当前 active pipelines:
+   #1 pipeline-login-fix: 开发 (developer 正在修 LoginActivity.kt, last commit: abc1234)
+   #2 pipeline-permission: 计划 (等待 planner 返回 PLAN.md)
+   #3 pipeline-ui-tweak: 测试 (tester 跑 instrumentation test)
+
+   请指定: "停 #N" 或 "停全部"
+   ```
+3. 等用户精确说"停 #N" 或 "停全部" 后才执行
+4. `暂停` pipeline 记录 `previous_state` 以便后续恢复
+5. 如果用户说"停全部"，所有 pipeline 切 `暂停`。如果所有 pipeline `暂停` 且无新任务，`global_state` 仍保持 `active`（主编排仍能接收指令）
+
+恢复:
+- 用户说"恢复 #N" → pipeline 从 `previous_state` 继续
+- 用户说"恢复全部" → 全部恢复
+
+### 2.3 主编排永远 receptive
+
+`global_state = active` 是常态。即使:
+- 所有 pipeline 都是 `暂停`
+- 所有 pipeline 都是 `已完成`
+- 正在等待 planner/tester/reviewer 返回
+
+主编排者仍能接收用户输入并响应。`global_state = blocked` 只在极少数情况下使用（Codex 0 额度 + 无 fallback / 网络断 / 关键依赖坏），且即使 `blocked` 也能接收用户输入，只是无法自动推进。
+
+主编排者收到用户输入后:
+1. 如果 `global_state = active` → 正常处理（切 pipeline / 新建 pipeline / 报告进度）
+2. 如果 `global_state = blocked` → 先报告阻塞原因，再处理用户指令
 
 ## 3. 钩子强制执行
 
@@ -381,6 +425,7 @@ ENV_CHECK
 -> CODE_RESEARCH
 -> CATEGORY_PLANNING   ← 此处触发 plan_must_be_agent 钩子
 -> PLAN_REVIEW         ← 此处触发 plan_review_or_defer 钩子
+-> TEST_TARGET         ← 新增: tester 先写失败测试 + RED 报告 (TDD 测试靶)
 -> CATEGORY_DEVELOPMENT
 -> TESTING_AND_ACCEPTANCE
 -> WAVE_INTEGRATION
@@ -396,6 +441,7 @@ ENV_CHECK
 | 门禁 | 阻断条件 |
 |---|---|
 | Gate 1 | 未批准计划，或 Codex 二次计划审查既未通过也未记录延期时，Write/Edit/MultiEdit 到 `app/` `src/` `lib/` `core/` `packages/` |
+| Gate 1.5 | V4 schema 下, 当前 pipeline `state` = `计划` / `已完成` / `暂停` 时改源码; 或 `state` ∈ {`测试靶`,`开发`,`测试`,`验收`} 但 `test_target_report` 不存在 (TDD 测试靶门禁) |
 | Gate 2 | 主编排者直接 Write/Edit `plan.md` 或 `plan.meta.json`；正式计划必须来自 DeepSeek V4 Pro / OpenCode/OMO 计划代理 |
 | Gate 3 | 无 `verification-report.md` 时执行 `git commit/merge/push` 或改 STATE 为 done |
 | Gate 4 | Write/Edit 到 `plan.md` `implementation.md` `test-report.md` `review.md` 等长文档 |
@@ -408,32 +454,77 @@ ENV_CHECK
 
 完整门禁定义见 `HOOKS.md`，guard 脚本见 `scripts/auto_dev_guard.py`。
 
-## 9. STATE.json Schema
+## 9. STATE.json Schema (V3_1_6 / schema_version=4)
 
 ```json
 {
-  "task_id": "",
-  "current_phase": "intake",
-  "orchestrator": "",
-  "planner_owner": "deepseek-v4-pro-planner | opencode-omo-planner",
-  "plan_status": "pending",
-  "plan_file": "",
-  "plan_meta_file": "",
-  "plan_reviewer": "codex-plan-reviewer | deferred_due_to_codex_quota | gpt-optional-enhancement",
-  "plan_review_status": "pending",
-  "plan_review_file": "",
-  "current_category": "",
-  "current_wave": 0,
-  "allowed_next_actions": [],
-  "last_output_file": "",
-  "next_input_file": "",
+  "task_id": "20260708-xxxx-xxx",
+  "schema_version": 4,
+  "global_state": "active",
+  "blocked_reason": null,
+  "pipelines": {
+    "<pipeline_id>": {
+      "category": "<category>",
+      "state": "计划",
+      "previous_state": null,
+      "plan_status": "pending",
+      "plan_file": "<path>",
+      "reviewer_status": "pending",
+      "test_target_report": null,
+      "last_commit": null,
+      "branch": "<name>",
+      "worktree": "<path or null>",
+      "created_at": "2026-07-08T00:00:00+08:00",
+      "updated_at": "2026-07-08T00:00:00+08:00"
+    }
+  },
+  "current_pipeline": null,
   "verification_status": "pending",
   "created_at": "",
   "updated_at": ""
 }
 ```
 
-阶段枚举：`intake` → `research` → `planning` → `plan_review` → `development` → `testing` → `acceptance` → `fixing` → `integration` → `verification` → `done` → `blocked`
+**pipeline 状态枚举** (7 状态):
+
+```
+计划 → 测试靶 → 开发 → 测试 → 验收 → 已完成
+  ↑                ↓
+  └────────────── 暂停
+```
+
+**global_state 枚举**:
+
+| 值 | 含义 | 主编排能接收? |
+|---|---|---|
+| `active` | 主编排在跑，至少一个 pipeline 不为 `暂停` | 是 |
+| `blocked` | 真无路可走 | 是，还能接收用户输入，但无法自动推进 |
+
+**7 状态机规则**:
+
+```
+新建 pipeline → 计划 (默认)
+计划 → 测试靶 (plan approved)
+测试靶 → 开发 (tester 写完失败测试 + RED 报告存在)
+开发 → 测试 (代码 commit)
+测试 → 验收 (测试绿)
+验收 → 已完成 (用户通过)
+验收 → 计划 (用户报 bug, 旧需求 re-plan)
+任何 → 暂停 (用户显式说"停")
+暂停 → 之前状态 (用户说"恢复")
+```
+
+**废弃字段映射** (V3 → V4 迁移):
+
+| 旧字段 | 新位置 |
+|---|---|
+| `current_phase` | `global_state` + per-pipeline `state` |
+| `current_category` | `current_pipeline` (pipeline_id) |
+| `current_wave` | 保留在 pipeline 内，不在 top-level |
+| `plan_status` (top-level) | 移到 pipeline 内 |
+| `plan_review_status` (top-level) | 移到 pipeline 内 → `reviewer_status` |
+
+迁移脚本：`skills/_shared/tools/migrate_state_v3_to_v4.py`
 
 
 ## 10. OpenCode / oh-my-openagent 桥接规则

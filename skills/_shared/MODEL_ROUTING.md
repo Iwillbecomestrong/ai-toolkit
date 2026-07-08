@@ -43,6 +43,29 @@ Codex 不可用时：不重复盲试、不阻塞 DeepSeek 计划 + MiniMax 开�
 - 只有用户开始下一批需求、显式结束上个对话、上下文污染、原会话不可恢复、跨类别架构判断或多轮同错不收敛时，才切新会话。
 - 可测试需求必须先写失败测试、最小复现或可执行验证脚本，再写实现。
 
+## 多 pipeline 并行规则 (V3_1_6)
+
+- 每个 pipeline 独立 7 状态生命周期: `计划 → 测试靶 → 开发 → 测试 → 验收 → 已完成`
+- `暂停` 仅主编排/用户显式说"停"时切入，记录 `previous_state`
+- 默认全并行，**无 `depends_on`**
+- 主编排 `global_state` 一直 = `active`，除非真无路可走
+
+## TDD 测试靶 (test_target)
+
+- `计划` → `测试靶`: tester 先写失败测试 + RED 报告
+- tester prompt 必须含:
+  1. 读取 PLAN.md "验收标准"段
+  2. 写失败测试 (junit / Robolectric / instrumented)
+  3. 写最小复现脚本 (bug 修复类)
+  4. 写可执行验证脚本 (UI 改动: adb + logcat grep)
+  5. 跑测试确认 RED (失败但可运行)
+  6. 产物目录 `.ai-work/runs/<task>/<category>/test_target/`:
+     - `TestClass.kt` 等测试文件
+     - `repro.sh` 复现脚本
+     - `verify.sh` 验证脚本
+     - `TEST_TARGET_REPORT.md` (状态 RED, 列出 3-5 个失败点)
+- **只有 `TEST_TARGET_REPORT.md` 存在且报告 RED，才能进 `开发`** (Gate 1.5 门禁)
+
 
 ## 原始输出保留
 

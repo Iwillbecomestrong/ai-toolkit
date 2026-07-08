@@ -12,22 +12,43 @@
 
 ---
 
-## 一、STATE.json 阶段枚举
+## 一、STATE.json 阶段枚举 (V3_1_6 / schema_version=4)
 
-| 阶段 | 含义 | 允许的动作 |
+V3 的单状态机 12 阶段已拆分为 **global_state (主编排总开关)** + **per-pipeline 7 状态机**。
+
+### global_state
+
+| 状态 | 含义 | 允许的动作 |
 |---|---|---|
-| `intake` | 初始化 | 需求澄清、创建 STATE.json |
-| `research` | 调研中 | 文件读取、调研代理调用 |
-| `planning` | 计划中 | 调用 DeepSeek V4 Pro planner / OpenCode-OMO plan wrapper，禁止编辑源码 |
-| `plan_review` | 二次计划审查 | 独立审查 `PLAN.md`，必须产出 `PLAN_REVIEW.md` 并批准 |
-| `development` | 开发中 | 允许编辑源码 |
-| `testing` | 测试中 | 允许编辑测试文件、修复 bug |
-| `acceptance` | 验收中 | 只读 + 验收报告 |
-| `fixing` | 修复中 | 允许编辑源码（限定范围） |
-| `integration` | 集成中 | 合并、集成测试 |
-| `verification` | 验证中 | 运行验证命令 |
-| `done` | 完成 | 只读 |
-| `blocked` | 阻塞 | 只读，等待解除阻塞 |
+| `active` | 主编排在跑，至少一个 pipeline 不在 `暂停` | 全许可 |
+| `blocked` | 真无路可走（Codex 0 额度 + 无 fallback / 网络断 / 关键依赖坏） | 只读 + 接收用户输入，无法自动推进 |
+
+### pipeline 状态 (7 状态)
+
+| 状态 | 含义 | 允许的动作 |
+|---|---|---|
+| `计划` | planner 生成/修订 PLAN.md | 调研、读文件、调 planner agent |
+| `测试靶` | tester 写失败测试 + RED 报告 | tester 读写测试文件，developer **禁止**编辑源码 |
+| `开发` | developer 实现 | developer 允许编辑源码 |
+| `测试` | tester 跑测试 | tester 构建+测试，允许修 bug |
+| `验收` | 用户/自动化验收 | 只读 + 验收报告 |
+| `已完成` | 完成 | 只读 |
+| `暂停` | 用户显式叫停 | 只读，等用户恢复 |
+
+**状态转换规则**:
+
+```text
+新建 pipeline → 计划
+计划 → 测试靶 (plan approved + plan_review approved/deferred)
+测试靶 → 开发 (TEST_TARGET_REPORT.md 存在且 RED)
+开发 → 测试 (代码 commit)
+测试 → 验收 (测试绿)
+验收 → 已完成 (用户通过)
+验收 → 计划 (用户报 bug / re-plan)
+任何 → 暂停 (用户显式说"停")
+暂停 → 之前状态 (用户说"恢复"), 记录在 previous_state
+已完成 → 计划 (re-plan, 走 planner)
+```
 
 ---
 
@@ -48,6 +69,17 @@
   - `plan_review_status` = "approved"
   - `PLAN_REVIEW.md` 或 `plan_review_file` 存在
 - **拒绝** → `当前任务尚未进入可开发阶段。请先完成调研、需求确认、计划生成，并通过二次计划审查。`
+
+### Gate 1.5: `开发` 前必须有 `测试靶` 产物 (test_target_before_develop)
+
+- **触发**: 工具为 Write / Edit / MultiEdit，目标路径在 `app/` `src/` `lib/` `core/` `packages/` 下，且 `current_pipeline` 指向的 pipeline `state` = `开发` / `测试靶` / `测试` / `验收` (V4 schema)
+- **检查**:
+  - 当前 pipeline `state` 从 `测试靶` 或更后状态进入 `开发` 才合法
+  - 如果 pipeline 直接从 `计划` 跳进 `开发` → 拒绝
+  - `test_target_report` 存在且文件可读
+- **拒绝** → `GATE 1.5 BLOCKED: 当前 pipeline state=<X>, test_target_report=<path or none>。必须先完成 测试靶 (tester 写失败测试 + RED 报告) 才能进入 开发。`
+- **允许**: pipeline `state` = `测试靶` | `开发` | `测试` | `验收` 且 `test_target_report` 文件存在
+- **V3 legacy 兼容**: 若 STATE.json 没有 `pipelines` 字段 (旧 schema), 跳过 Gate 1.5
 
 ### Gate 2：主编排者不能直接写正式计划
 

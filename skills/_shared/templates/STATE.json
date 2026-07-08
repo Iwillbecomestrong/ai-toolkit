@@ -1,10 +1,26 @@
 {
   "task_id": "TASK-YYYYMMDD-HHMM-short-name",
-  "current_wave": 1,
-  "current_category": "category-id",
-  "current_phase": "planning",
-  "next_agent_role": "developer",
-  "next_input_file": ".ai-work/runs/TASK-.../category-id/PLAN.md",
-  "risk": "medium",
-  "last_commit": "NONE"
+  "schema_version": 4,
+  "global_state": "active",
+  "blocked_reason": null,
+  "pipelines": {
+    "pipeline-category-id": {
+      "category": "category-id",
+      "state": "计划",
+      "previous_state": null,
+      "plan_status": "pending",
+      "plan_file": null,
+      "reviewer_status": "pending",
+      "test_target_report": null,
+      "last_commit": null,
+      "branch": "",
+      "worktree": null,
+      "created_at": "2026-07-08T00:00:00+08:00",
+      "updated_at": "2026-07-08T00:00:00+08:00"
+    }
+  },
+  "current_pipeline": "pipeline-category-id",
+  "verification_status": "pending",
+  "created_at": "2026-07-08T00:00:00+08:00",
+  "updated_at": "2026-07-08T00:00:00+08:00"
 }

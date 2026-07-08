@@ -22,12 +22,11 @@ from datetime import datetime
 import re
 
 
-# ── phase enum ──────────────────────────────────────────────────
-VALID_PHASES = {
-    "intake", "research", "planning", "plan_review",
-    "development", "testing", "acceptance", "fixing",
-    "integration", "verification", "done", "blocked"
-}
+# ── pipeline state enum (7 states, V3_1_6) ─────────────────────
+VALID_PIPELINE_STATES = {"计划", "测试靶", "开发", "测试", "验收", "已完成", "暂停"}
+VALID_GLOBAL_STATES = {"active", "blocked"}
+# backward compat alias (旧脚本可能引用 VALID_PHASES)
+VALID_PHASES = VALID_PIPELINE_STATES
 
 # ── source directories (paths that trigger edit gate) ───────────
 SOURCE_DIRS = ["app/", "src/", "lib/", "core/", "packages/"]
@@ -84,24 +83,32 @@ BUG_REPORT_KEYWORDS = [
     "滚动不了", "点不了", "没反应", "卡住",
 ]
 
-# ── STATE.json schema (template) ─────────────────────────────────
+# ── STATE.json schema (template, V3_1_6 / schema_version=4) ────
+# V3 → V4 migration: 12-phase global enum 拆分为 global_state + per-pipeline state
 STATE_SCHEMA = {
     "task_id": "",
-    "current_phase": "intake",
-    "orchestrator": "",
-    "planner_owner": "deepseek-v4-pro-planner",
-    "plan_status": "pending",
-    "plan_file": "",
-    "plan_meta_file": "",
-    "plan_reviewer": "gpt-5.4-plan-reviewer",
-    "plan_review_status": "pending",
-    "plan_review_file": "",
-    "current_category": "",
-    "current_wave": 0,
-    "allowed_next_actions": [],
-    "last_output_file": "",
-    "next_input_file": "",
+    "schema_version": 4,
+    "global_state": "active",
+    "blocked_reason": None,
+    "pipelines": {},
+    "current_pipeline": None,
     "verification_status": "pending",
+    "created_at": "",
+    "updated_at": ""
+}
+
+# ── per-pipeline schema (V3_1_6 新增) ───────────────────────────
+PIPELINE_STATE_SCHEMA = {
+    "category": "",
+    "state": "计划",
+    "previous_state": None,
+    "plan_status": "pending",
+    "plan_file": None,
+    "reviewer_status": "pending",
+    "test_target_report": None,
+    "last_commit": None,
+    "branch": "",
+    "worktree": None,
     "created_at": "",
     "updated_at": ""
 }
@@ -289,7 +296,66 @@ def has_verification(state_dir):
 
 # ═══════════════════════════════════════════════════════════════════
 #  GATE 1: No source edits before plan is approved
+#  V3_1_6: 适配 V4 schema (per-pipeline state) + V3 legacy (current_phase)
 # ═══════════════════════════════════════════════════════════════════
+def _resolve_pipeline_state(state):
+    """从 state 提取当前 pipeline 的有效状态。
+
+    V4 schema 优先: pipelines[current_pipeline].state
+    V3 legacy 兼容: current_phase (直接返回)
+
+    Returns: (effective_state, pipeline_dict_or_None, is_v4)
+    """
+    pipelines = state.get("pipelines")
+    current_pipeline_id = state.get("current_pipeline")
+
+    # V4 schema 检测
+    if isinstance(pipelines, dict) and current_pipeline_id and current_pipeline_id in pipelines:
+        pipeline = pipelines[current_pipeline_id] or {}
+        return pipeline.get("state", "计划"), pipeline, True
+
+    # V3 legacy fallback
+    legacy_phase = state.get("current_phase", "intake")
+    # V3 旧 12-phase → 7-state 近似映射
+    legacy_to_v4 = {
+        "intake": "计划", "research": "计划", "planning": "计划", "plan_review": "计划",
+        "development": "开发", "fixing": "开发", "testing": "测试",
+        "integration": "测试", "acceptance": "验收", "verification": "验收",
+        "done": "已完成", "blocked": "暂停",
+    }
+    return legacy_to_v4.get(legacy_phase, "计划"), None, False
+
+
+def _resolve_plan_status(state, pipeline):
+    """提取 plan_status, 优先 V4 per-pipeline, fallback V3 top-level."""
+    if pipeline and "plan_status" in pipeline:
+        return pipeline.get("plan_status", "pending")
+    return state.get("plan_status", "pending")
+
+
+def _resolve_reviewer_status(state, pipeline, plan_meta):
+    """提取 plan_review_status, 优先 V4 per-pipeline, fallback V3 top-level/plan_meta."""
+    if pipeline and "reviewer_status" in pipeline:
+        return pipeline.get("reviewer_status", "pending")
+    return (
+        state.get("plan_review_status")
+        or plan_meta.get("plan_review_status", "pending")
+    )
+
+
+def _resolve_plan_review_file(state, pipeline, plan_meta):
+    """提取 plan_review_file, 优先 V4 per-pipeline, fallback V3 top-level/plan_meta."""
+    if pipeline:
+        file_path = pipeline.get("plan_review_file")
+        if file_path:
+            return file_path
+    return (
+        state.get("plan_review_file")
+        or plan_meta.get("plan_review_file")
+        or plan_meta.get("review_file")
+    )
+
+
 def gate_no_edit_without_plan(hook_input, state, state_dir):
     tool_name = hook_input.get("tool_name", "")
     if tool_name not in ("Write", "Edit", "MultiEdit"):
@@ -299,20 +365,30 @@ def gate_no_edit_without_plan(hook_input, state, state_dir):
     if not is_source_path(file_path):
         return True, ""
 
-    current_phase = state.get("current_phase", "intake")
-    if current_phase not in ("development", "fixing", "testing"):
-        return False, (
-            f"GATE 1 BLOCKED: current_phase={current_phase} — "
-            f"源码编辑只允许在 development/fixing/testing 阶段。"
-        )
+    effective_state, pipeline, is_v4 = _resolve_pipeline_state(state)
+    if is_v4:
+        if effective_state not in ("开发", "测试"):
+            return False, (
+                f"GATE 1 BLOCKED: pipeline state={effective_state} — "
+                f"源码编辑只允许在 开发 / 测试 阶段。"
+            )
+    else:
+        # V3 legacy path
+        if effective_state not in ("开发", "测试"):
+            legacy_phase = state.get("current_phase", "intake")
+            return False, (
+                f"GATE 1 BLOCKED: current_phase={legacy_phase} — "
+                f"源码编辑只允许在 development/fixing/testing 阶段。"
+            )
 
-    if state.get("plan_status") != "approved":
+    plan_status = _resolve_plan_status(state, pipeline)
+    if plan_status != "approved":
         return False, (
-            f"GATE 1 BLOCKED: plan_status={state.get('plan_status')} — "
+            f"GATE 1 BLOCKED: plan_status={plan_status} — "
             f"计划未批准前不能修改源码。"
         )
 
-    plan_file = state.get("plan_file", "")
+    plan_file = (pipeline.get("plan_file") if pipeline else None) or state.get("plan_file", "")
     if not plan_file or not os.path.exists(plan_file):
         return False, "GATE 1 BLOCKED: plan_file 不存在。"
 
@@ -337,9 +413,9 @@ def gate_no_edit_without_plan(hook_input, state, state_dir):
             f"{plan_meta.get('plan_status')}，不是 approved。"
         )
 
-    plan_review_status = state.get("plan_review_status") or plan_meta.get("plan_review_status")
+    plan_review_status = _resolve_reviewer_status(state, pipeline, plan_meta)
     if plan_review_status == "approved":
-        plan_review_file = state.get("plan_review_file") or plan_meta.get("plan_review_file") or plan_meta.get("review_file")
+        plan_review_file = _resolve_plan_review_file(state, pipeline, plan_meta)
         if not plan_review_file:
             return False, "GATE 1 BLOCKED: plan_review_file 未记录；GPT/Codex 有额度时必须产出 PLAN_REVIEW.round1.gpt-5.4.md 或 PLAN_REVIEW.md。"
         if plan_review_file and not os.path.exists(plan_review_file):
@@ -369,6 +445,55 @@ def gate_no_edit_without_plan(hook_input, state, state_dir):
         f"GATE 1 BLOCKED: plan_review_status={plan_review_status} — "
         "Codex 二次计划审查既未通过，也未记录额度延期。"
     )
+
+
+# ═══════════════════════════════════════════════════════════════════
+#  GATE 1.5: 开发前必须有 test_target_report 产物 (TDD gate)
+#  V3_1_6 新增: per-pipeline 7 状态, 测试靶 → 开发 → 测试 → 验收
+# ═══════════════════════════════════════════════════════════════════
+def gate_test_target_before_develop(hook_input, state, state_dir):
+    """开发阶段必须先有 test_target_report (RED)."""
+    tool_name = hook_input.get("tool_name", "")
+    if tool_name not in ("Write", "Edit", "MultiEdit"):
+        return True, ""
+
+    file_path = hook_input.get("file_path", "") or hook_input.get("path", "")
+    if not is_source_path(file_path):
+        return True, ""
+
+    pipelines = state.get("pipelines")
+    current_pipeline_id = state.get("current_pipeline")
+    if not (isinstance(pipelines, dict) and current_pipeline_id and current_pipeline_id in pipelines):
+        # V3 legacy: 旧 schema 没有 per-pipeline 概念, 跳过 Gate 1.5
+        return True, ""
+
+    pipeline = pipelines[current_pipeline_id] or {}
+    pipeline_state = pipeline.get("state", "计划")
+
+    if pipeline_state in ("测试靶", "开发", "测试", "验收"):
+        test_target_report = pipeline.get("test_target_report")
+        if test_target_report and os.path.exists(test_target_report):
+            return True, ""
+        return False, (
+            f"GATE 1.5 BLOCKED: 当前 pipeline state={pipeline_state}, "
+            f"test_target_report={test_target_report or 'None'}。"
+            f"必须先完成 测试靶 (tester 写失败测试 + RED 报告) 才能进 开发。"
+        )
+
+    if pipeline_state == "计划":
+        return False, (
+            f"GATE 1.5 BLOCKED: 当前 pipeline state={pipeline_state}。"
+            f"计划完成后必须先进入 测试靶 (tester 写失败测试 + RED 报告), 再进 开发。"
+            f"禁止跳过 测试靶 直接改代码。"
+        )
+
+    if pipeline_state in ("已完成", "暂停"):
+        return False, (
+            f"GATE 1.5 BLOCKED: 当前 pipeline state={pipeline_state}。"
+            f"如需修改, 请先将 pipeline 状态切回 计划 (re-plan), 再走 测试靶 → 开发。"
+        )
+
+    return True, ""
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -659,6 +784,7 @@ def handle_pretooluse(hook_input, state, state_dir):
     else:
         gates = [
             ("GATE_1", gate_no_edit_without_plan),
+            ("GATE_1_5", gate_test_target_before_develop),
             ("GATE_2", gate_orchestrator_no_plan_write),
             ("GATE_3", gate_no_commit_without_verification),
             ("GATE_4", gate_orchestrator_no_long_doc_copy),
