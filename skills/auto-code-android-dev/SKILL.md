@@ -12,6 +12,8 @@ allowed-tools: Read Write Edit Glob Grep Bash Agent SendMessage
 
 **在回复用户之前**，立即用 Read 工具完整读取以下 5 个文件。不读完、不展示关键规则摘要，**禁止**进入任何阶段：
 
+> **Step 0**: 先读 `superpowers:using-git-worktrees` 决定是否进 worktree。修改任何 skill / 规则 / 源码前，默认进隔离工作树；主分支上只能读 + 写 handoff 文档。
+
 | # | 文件 | 内容 |
 |---|---|---|
 | 1 | `../_shared/SKILL_CORE.md` | 核心规则、阶段路由、状态文件 schema、主编排角色 |
@@ -19,6 +21,7 @@ allowed-tools: Read Write Edit Glob Grep Bash Agent SendMessage
 | 3 | `../_shared/HOOKS.md` | 强制门禁清单、Gate 1-5、Claude Code hooks 配置 |
 | 4 | `../_shared/MODEL_ROUTING.md` | 默认模型分工、强制规则、审查分轮、生产线规则 |
 | 5 | `../auto-dev/SKILL.md` | 通用编排入口、编排后端选择、类别分组、工作树 commit 规范 |
+| 6 | `<Claude plugins>/superpowers/skills/using-git-worktrees/SKILL.md` | 强制工作树隔离 — 修改 skill/规则/源码前必须建 worktree，防 working tree 丢失 |
 
 > 本文件只是 **Android 专用差异**（ADB、Gradle、模拟器、APK、Logcat、设备验收）。
 > 完整流程、状态机、门禁、模型路由全部定义在上述 5 个文件中。
@@ -139,6 +142,23 @@ find app/src/main -name "*.kt" -newer app/build/outputs/apk/debug/app-debug.apk
 | 高风险增强 | Codex/GPT 有额度时才启用；计划复核在 PLAN_REVIEW 节点，代码审查在 CODE_REVIEW 节点；Codex 无额度时记录并跳过 |
 
 Android 任务在 `PLAN.md` 生成后优先调用 Codex 做二次计划审查；Codex 无额度时记录延期审查，不阻塞当前修复。锁屏、后台服务、权限、生命周期、跨日时间等问题一旦计划错，后续返工成本远高于一次审查。
+
+### 钩子自检（每次 Write/Edit/Bash/Agent 前，Android 扩展）
+
+在 auto-dev 钩子自检基础上，Android 入口额外检查：
+
+```
+□ Agent dispatch 的 model 参数是否按角色（非步骤）选择？
+  → planner=deepseekV4pro, developer=sonnet|opus, tester=sonnet|haiku, reviewer=codex(唯一)
+□ 子代理 prompt 是否含原始 log + 用户原话（不含主编排解读）？
+  → 子代理 INPUT 必须是原始数据，不是主编排的二次加工
+□ 终端 echo 是否显示最底层实际模型名？
+  → 派单时 echo "派 [角色:实际模型名] 任务简述"
+□ Codex 额度是否已检查？
+  → 见 MODEL_QUOTA_CHECK.md；没额度不显示 review 步骤
+□ 是否在 Bash 调用 Codex？
+  → 必须先报告: 「Codex 调用: [用途, 模型:codex, 输入, 预期输出]」
+```
 
 若 Codex 输出 `changes_required`，不得直接让开发者开改；必须先回到 DeepSeek V4 Pro planner / 计划 owner，由 planner 判断审查意见是否成立并修订 `PLAN.md` / `PLAN_PATCH.md`。Android 的测试靶子、最小复现、logcat 断言和 ADB 验收步骤必须以修订后的计划为准。
 

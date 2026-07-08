@@ -125,6 +125,17 @@
   - `git restore <file>` 撤销错误改动
 - **失败行为**：阻断 commit、阻断"完成"声明、阻断 Agent 退出
 
+### Gate 6: Agent dispatch 缺 `model` 参数时阻断 (agent_dispatch_model_required)
+
+- **触发**：工具为 `Agent`，且 hook_input 中 `model` 字段为空或未设置
+- **检查**：
+  - Agent 工具的 `model` 参数是否显式传入
+  - 如果 `model` 为空/未传 → 允许（主编排默认 = MiniMax-M3，不需要 model 参数）
+  - 但对于已知角色 agent type（`auto-dev-developer`, `auto-dev-tester`, `auto-dev-researcher`, `auto-dev-emulator-tester`, `auto-dev-brainstorm`, `auto-dev-writing`），如果 `model` 为空 → **阻断**
+- **允许**：主编排自身的 Agent 调用（无 model 参数，默认 MiniMax-M3）
+- **拒绝** → `GATE 6 BLOCKED: auto-dev 子代理 dispatch 缺少 model 参数。必须显式传入 model (sonnet/opus/haiku/fable)，按角色选择。planner=fable(deepseekV4pro), developer=sonnet|opus, tester=sonnet|haiku, reviewer=codex(CLI).`
+- **注意**：此门禁为**轻量阻断**（仅对已知 auto-dev agent type 生效），不能替代 prompt 层钩子自检。如果 guard.py 未更新或不支持解析 Agent tool 的 model 参数，此门禁退化为 prompt 层强制执行。
+
 ---
 
 ## 三、System 层：Stop Hook（轻量提醒）

@@ -517,6 +517,39 @@ def gate_working_tree_hygiene(hook_input, state, state_dir):
     return True, ""
 
 
+# ═══════════════════════════════════════════════════════════════════
+#  GATE 6: Agent dispatch must include explicit model parameter
+# ═══════════════════════════════════════════════════════════════════
+KNOWN_AUTO_DEV_AGENT_TYPES = {
+    "auto-dev-developer",
+    "auto-dev-tester",
+    "auto-dev-researcher",
+    "auto-dev-emulator-tester",
+    "auto-dev-brainstorm",
+    "auto-dev-writing",
+}
+
+def gate_agent_dispatch_model_required(hook_input, state, state_dir):
+    """Block Agent dispatch to known auto-dev agent types without explicit model."""
+    tool_name = hook_input.get("tool_name", "")
+    if tool_name != "Agent":
+        return True, ""
+
+    subagent_type = hook_input.get("subagent_type", "") or hook_input.get("agent_type", "")
+    if not subagent_type or subagent_type not in KNOWN_AUTO_DEV_AGENT_TYPES:
+        return True, ""
+
+    model = hook_input.get("model", "") or hook_input.get("model_name", "")
+    if not model:
+        return False, (
+            f"GATE 6 BLOCKED: Agent dispatch to '{subagent_type}' 缺少 model 参数。"
+            "auto-dev 子代理必须显式传入 model (sonnet/opus/haiku/fable)，按角色选择。"
+            "planner=fable(deepseekV4pro), developer=sonnet|opus, tester=sonnet|haiku, reviewer=codex(CLI)."
+        )
+
+    return True, ""
+
+
 def gate_task_source_edit_requires_plan_agent(hook_input, task_context):
     tool_name = hook_input.get("tool_name", "")
     if tool_name not in ("Write", "Edit", "MultiEdit"):
@@ -621,6 +654,7 @@ def handle_pretooluse(hook_input, state, state_dir):
             ("GATE_2", gate_orchestrator_no_plan_write),
             ("GATE_4", gate_orchestrator_no_long_doc_copy),
             ("GATE_5", gate_working_tree_hygiene),
+            ("GATE_6", gate_agent_dispatch_model_required),
         ]
     else:
         gates = [
@@ -629,6 +663,7 @@ def handle_pretooluse(hook_input, state, state_dir):
             ("GATE_3", gate_no_commit_without_verification),
             ("GATE_4", gate_orchestrator_no_long_doc_copy),
             ("GATE_5", gate_working_tree_hygiene),
+            ("GATE_6", gate_agent_dispatch_model_required),
         ]
 
     for gate_name, gate_fn in gates:

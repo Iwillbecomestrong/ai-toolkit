@@ -235,34 +235,77 @@ blocked:
 
 主编排只需要收到进度摘要：当前步骤、关键文件路径、commit hash、阻塞点、下一步。长文档仍以文件为准。
 
-### 5.2 子代理派遣协议 —— Agent label 必须显式声明角色+模型
+#### 子代理 prompt 必须含原始 INPUT，不含主编排解读
 
-每次用 Agent 工具派遣子代理时，**label 字段必须**使用以下格式，不得省略模型名：
+在向子代理派遣任务时，prompt 中必须包含：
+
+1. **原始 log**（编译输出、lint 错误、logcat、崩溃堆栈、测试失败输出等），原文照贴
+2. **用户原话**（用户反馈 bug 的原始消息、用户需求原文），原文照贴
+3. **相关文件路径列表**（需要读取的文件）
+4. **简短任务描述**（1-3 句话，只说做什么，不解释为什么、不预判根因）
+
+**禁止**在子代理 prompt 中加入：
+- 主编排的根因推测（"我觉得是 X 导致 Y"）
+- 主编排的方案建议（"你可以试试改成 Z"）
+- 主编排对原始 log 的过滤/摘要（"错误大概就是 X 有问题"）
+
+**原因**: 子代理需要基于原始事实做独立判断。主编排的解读可能引入偏见，导致子代理走弯路。用户原话: "你要给出原始的一个信息给子代理不能影响他的判断"。
+
+**正确示例**:
+```
+INPUT:
+- 用户原话: "点击开始按钮后闪退，logcat 报 NullPointerException"
+- 原始 logcat: (贴完整堆栈)
+- 相关文件: app/src/main/java/com/ironwill/ui/StartButton.kt
+- 任务: 定位并修复点击开始按钮导致的 NullPointerException
+```
+
+**错误示例**:
+```
+INPUT:
+- 用户说开始按钮闪退，我猜是 Intent 没初始化导致的
+- 你去 StartButton.kt 里加个 null check 应该就行了
+```
+
+### 5.2 子代理派遣协议 —— Agent label + 终端 echo 必须显式声明角色+最底层实际模型名
+
+每次用 Agent 工具派遣子代理时，**label 字段必须**使用以下格式，不得省略模型名。模型名必须用**终端显示名**（最底层实际模型），不是内部代号：
 
 ```
-[角色:模型] 任务简述
+[角色:终端显示模型名] 任务简述
 ```
+
+**终端显示模型名对照表**：
+
+| 终端显示 | `model=` 参数 | 实际运行 |
+|---|---|---|
+| `deepseekV4pro` | `fable` | Claude Fable 5 (deepseek-v4-pro) |
+| `opus` | `opus` | Claude Opus 4.8 |
+| `sonnet` | `sonnet` | Claude Sonnet 4.6 |
+| `haiku` | `haiku` | Claude Haiku 4.5 |
+| `codex` | (Codex CLI `codex exec`) | GPT-5.4 / GPT-5.5 (Codex 内部) |
+| (主编排, 默认不传) | (不传 `model`) | MiniMax-M3[1m] |
 
 **Agent 派遣**（通过 Agent 工具）：
 
 | 角色 | 强制 label 前缀 | 说明 |
 |---|---|---|
-| 计划代理 | `[planner:deepseek-v4-pro]` | 生成/修订 PLAN.md、PLAN_PATCH.md |
-| 开发代理 | `[developer:minimax-m3]` | 按已批准 PLAN 实现代码、自测、原子 commit |
-| 测试代理 | `[tester:minimax-m3]` | 构建、测试、验收、复验，不改生产代码 |
-| 调研代理 | `[researcher:minimax-m3]` | 目录整理、文件定位、调用链梳理 |
-| 一轮计划审查 | `[reviewer:gpt-5.4]` | 第一轮审查 PLAN.md，输出 PLAN_REVIEW.round1 |
-| 二轮复审/升级审查 | `[reviewer:gpt-5.5]` | 返工后第二轮复审，禁止退回 gpt-5.4 |
-| 代码审查 | `[code-reviewer:gpt-5.4]` | 审查关键 diff / 高风险代码 |
+| 计划代理 | `[planner:deepseekV4pro]` | 生成/修订 PLAN.md、PLAN_PATCH.md |
+| 开发代理 | `[developer:sonnet]` (一般) / `[developer:opus]` (高风险) | 按已批准 PLAN 实现代码、自测、原子 commit |
+| 测试代理 | `[tester:sonnet]` (写测试) / `[tester:haiku]` (跑测试) | 构建、测试、验收、复验，不改生产代码 |
+| 调研代理 | `[researcher:haiku]` | 目录整理、文件定位、调用链梳理 |
+| 一轮计划审查 | `[reviewer:codex]` | 第一轮审查 PLAN.md (Codex CLI 内部 gpt-5.4)，输出 PLAN_REVIEW.round1 |
+| 二轮复审/升级审查 | `[reviewer:codex]` | 返工后第二轮复审 (Codex CLI 内部 gpt-5.5)，禁止退回 gpt-5.4 |
+| 代码审查 | `[reviewer:codex]` | 审查关键 diff / 高风险代码 (Codex CLI 内部 gpt-5.4) |
 
 **Codex CLI 调用**（通过 Bash 工具，走 `run-codex-*.ps1`）：
 
-| 用途 | 触发时机 | Wrapper + 模型 | 输出文件 |
-|---|---|---|---|
-| Codex 计划审查 | PLAN.md 首次生成后 | `run-codex-review.ps1` **`-Model gpt-5.4`** | `PLAN_REVIEW.gpt-5.4.md` |
-| Codex 计划审查 **（升级）** | **上个交付周期用户反馈了 bug**，planner 出了新的 PLAN/PLAN_PATCH | `run-codex-review.ps1` **`-Model gpt-5.5`**（禁止退回 gpt-5.4） | `PLAN_REVIEW.gpt-5.5.md` |
-| Codex 代码审查 | 实现+测试完成后 | `run-codex-code-review.ps1` **`-Model gpt-5.4`** | `CODE_REVIEW.gpt-5.4.md` |
-| Codex 救火 | 多轮返工仍失败、根因不清 | `run-codex-rescue.ps1` **`-Model gpt-5.5`** | `RESCUE_REPORT.md` |
+| 用途 | 触发时机 | Wrapper + 模型 | 终端显示 | 输出文件 |
+|---|---|---|---|---|
+| Codex 计划审查 | PLAN.md 首次生成后 | `run-codex-review.ps1` **`-Model gpt-5.4`** | `[reviewer:codex]` | `PLAN_REVIEW.gpt-5.4.md` |
+| Codex 计划审查 **（升级）** | **上个交付周期用户反馈了 bug**，planner 出了新的 PLAN/PLAN_PATCH | `run-codex-review.ps1` **`-Model gpt-5.5`**（禁止退回 gpt-5.4） | `[reviewer:codex]` | `PLAN_REVIEW.gpt-5.5.md` |
+| Codex 代码审查 | 实现+测试完成后 | `run-codex-code-review.ps1` **`-Model gpt-5.4`** | `[reviewer:codex]` | `CODE_REVIEW.gpt-5.4.md` |
+| Codex 救火 | 多轮返工仍失败、根因不清 | `run-codex-rescue.ps1` **`-Model gpt-5.5`** | `[reviewer:codex]` | `RESCUE_REPORT.md` |
 
 **"一轮"和"二轮"不是同一个 plan 来回审，而是不同的交付周期**：
 
@@ -291,23 +334,29 @@ blocked:
 **示例**：
 
 ```
-Agent label: "[planner:deepseek-v4-pro] 为 CAT-1 (锁屏闹钟UI修复) 生成 PLAN.md"
-Agent label: "[reviewer:gpt-5.4] 审查 CAT-1 PLAN.md — 需求覆盖+文件范围+测试先行+风险"
-Agent label: "[reviewer:gpt-5.5] 复审 CAT-1 PLAN_PATCH.v2.md — 第一轮未通过的返工审查"
-Agent label: "[developer:minimax-m3] 实现 CAT-1 — 按 PLAN.md 修改 window_alarm_overlay.xml"
-Agent label: "[tester:minimax-m3] 验收 CAT-1 — 构建+ADB安装+logcat验证"
+Agent label: "[planner:deepseekV4pro] 为 CAT-1 (锁屏闹钟UI修复) 生成 PLAN.md"
+Agent label: "[reviewer:codex] 审查 CAT-1 PLAN.md — 需求覆盖+文件范围+测试先行+风险"
+Agent label: "[reviewer:codex] 复审 CAT-1 PLAN_PATCH.v2.md — 第一轮未通过的返工审查 (内部 gpt-5.5)"
+Agent label: "[developer:sonnet] 实现 CAT-1 — 按 PLAN.md 修改 window_alarm_overlay.xml"
+Agent label: "[tester:sonnet] 验收 CAT-1 — 构建+ADB安装+logcat验证"
 
-Codex 调用: [plan-review:codex-gpt-5.4] 输入 CAT-1/PLAN.md → 预期输出 CAT-1/PLAN_REVIEW.round1.gpt-5.4.md
-Codex 调用: [plan-review:codex-gpt-5.5] 复审 CAT-1/PLAN_PATCH.v2.md → 预期输出 CAT-1/PLAN_REVIEW.round2.gpt-5.5.md
+终端 echo:
+派 [planner:deepseekV4pro] 为 CAT-1 生成 PLAN.md
+派 [reviewer:codex] 审查 CAT-1 PLAN.md (内部 gpt-5.4)
+派 [developer:sonnet] 实现 CAT-1
+派 [tester:sonnet] 验收 CAT-1
 ```
 
 **禁止**：
-- 省略模型名：`[planner]` ❌ → 必须写 `[planner:deepseek-v4-pro]`
-- 主编排者自己当 planner：不得用 `[planner:minimax-m3]` 或 `[planner:claude]`——计划只有 DeepSeek V4 Pro 能做
-- 主编排者自己当 developer：主编排者**不是 developer**，源码修改必须 dispatch `[developer:minimax-m3]`
-- 返工后用 gpt-5.4 审查第二轮：第一轮失败的，第二轮必须升级到 `[reviewer:gpt-5.5]`
-- 主编排者直接 Write/Edit 源码代替 dispatch developer：这会触发 Gate 1 阻断（如果 plan_review_status 不是 approved）
+- 省略模型名：`[planner]` ❌ → 必须写 `[planner:deepseekV4pro]`
+- 模型名用内部代号：`[planner:deepseek-v4-pro]` ❌ → 必须用终端显示名 `[planner:deepseekV4pro]`
+- 主编排者自己当 planner：计划只有 DeepSeek V4 Pro (通过 fable agent) 能做
+- 主编排者自己当 developer：主编排者**不是 developer**，源码修改必须 dispatch developer 子代理
+- 主编排者自己当 reviewer：**禁止用任何 Claude 模型 (opus/sonnet/haiku/fable) 做 review**。reviewer 唯一 = Codex CLI (内部 gpt-5.4/gpt-5.5)
+- 返工后用 gpt-5.4 审查第二轮：第一轮失败的，第二轮必须升级到 Codex CLI (内部 gpt-5.5)
+- 主编排者直接 Write/Edit 源码代替 dispatch developer：这会触发 Gate 1 阻断
 - Codex 黑箱调用：不报告模型、不展示 stdout 模型标识行 ❌
+- 派单时不 echo 实际模型名：每次 dispatch 必须在终端 echo "派 [角色:模型名] 任务简述"
 
 ## 6. 状态文件
 

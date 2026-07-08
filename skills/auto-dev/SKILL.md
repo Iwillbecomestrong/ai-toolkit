@@ -12,12 +12,15 @@ allowed-tools: Read Write Edit Glob Grep Bash Agent SendMessage
 
 **在回复用户之前**，立即用 Read 工具完整读取以下 4 个文件。不读完、不展示关键规则摘要，**禁止**进入任何阶段：
 
+> **Step 0**: 先读 `superpowers:using-git-worktrees` 决定是否进 worktree。修改任何 skill / 规则 / 源码前，默认进隔离工作树；主分支上只能读 + 写 handoff 文档。
+
 | # | 文件 | 内容 |
 |---|---|---|
 | 1 | `../_shared/SKILL_CORE.md` | 核心规则、阶段路由、状态文件 schema、主编排角色 |
 | 2 | `../_shared/WORKFLOW.md` | 状态机、角色模型、生产线、并行策略、返工闭环 |
 | 3 | `../_shared/HOOKS.md` | 强制门禁清单、Gate 1-5、Claude Code hooks 配置 |
 | 4 | `../_shared/MODEL_ROUTING.md` | 默认模型分工、强制规则、审查分轮、生产线规则 |
+| 5 | `<Claude plugins>/superpowers/skills/using-git-worktrees/SKILL.md` | 强制工作树隔离 — 修改 skill/规则/源码前必须建 worktree，防 working tree 丢失 |
 
 > 本文件只是**入口 + 差异化规则**（编排后端、类别分组、工作树 commit 规范、Android 路由）。
 > 完整流程、状态机、门禁、模型路由全部定义在上述 4 个共享文件中。
@@ -197,6 +200,21 @@ Codex/GPT 是**二次计划审查与关键代码审查的首选代理**，但受
 
 因此，**当前同一回合的 PLAN 和 PLAN_REVIEW 即使都在 Claude 框架内，也不应由同一责任会话自写自审；不同框架更不叫复用同一会话，只叫复用同一类别文件化上下文**。用户反馈后的二次计划修订、返工、救火，若仍属同类别/同模块，按责任身份回到原会话继续：原 developer 修，原 reviewer/tester 复验关闭。
 
+### 派单前额度检查（强制前置）
+
+在显示派单矩阵和执行任何 dispatch 之前，必须先检查 Codex 额度：
+
+1. 运行 `codex exec -C . --sandbox read-only --color never -m gpt-5.4 - "Say hi"` 测试 Codex 可用性
+2. 将结果写入 `{STATE_DIR}/runs/<task>/MODEL_QUOTA_CHECK.md`（模板见 `templates/MODEL_QUOTA_CHECK.md.template`）
+3. 如果 Codex 不可用（usage limit / auth error）：
+   - **不显示** review 步骤在派单矩阵中
+   - 标注 `reviewer: N/A (Codex 无额度)`
+   - 写 `DEFERRED_CODEX_REVIEW.md`
+4. 如果 Codex 可用：
+   - 派单矩阵中显示 review 步骤，模型标 `codex`
+
+**禁止**在额度检查之前展示派单矩阵或 dispatch 任何子代理。
+
 ### Plan Agent 自动选择
 
 按下列顺序尝试计划 / 审查入口：
@@ -282,15 +300,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "<project wrapper script>" -
 □ 目标是否在 app/src/lib/core/packages/ 下？
   → current_phase 必须是 development/fixing/testing 且 plan_status = approved
 □ 目标是否是 plan.md / plan.meta.json？
-  → 主编排者禁止直接写，必须 dispatch [planner:deepseek-v4-pro]
+  → 主编排者禁止直接写，必须 dispatch [planner:deepseekV4pro]
 □ 是否准备进入 development/fixing/testing？
   → plan_status 和 plan_review_status 都必须是 approved
 □ 命令是否包含 git merge/push/release/done？
   → 检查 verification-report.md 存在且 EXIT_CODE = 0
 □ 是否在 Agent dispatch？
-  → label 必须用 [角色:模型] 格式
+  → label 必须用 [角色:模型] 格式，model 参数按角色选择（非按步骤）
+  → 子代理 prompt 必须包含"原始 log + 用户原话"作为 INPUT，不含主编排解读
 □ 是否在 Bash 调用 Codex？
-  → 必须先报告: 「Codex 调用: [用途, 模型:gpt-5.x, 输入, 预期输出]」
+  → 必须先报告: 「Codex 调用: [用途, 模型:codex, 输入, 预期输出]」
+□ 终端 echo 是否显示最底层实际模型名？
+  → 派单时 echo "派 [角色:实际模型名] 任务简述"，模型名用终端显示名（如 deepseekV4pro, sonnet, opus, haiku, codex）
 ```
 
 ## ⛔ 工作树 commit 规范（强约束）
