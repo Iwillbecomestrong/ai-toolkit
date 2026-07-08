@@ -45,6 +45,7 @@ $ARGUMENTS
 5. **用户中途补充信息 ≠ 退出 auto-dev**。即使用户插话补充需求、提问或纠正，auto-dev 流程不会取消。收到任何消息后，第一步永远是读取 STATE.json 恢复状态，吸收用户补充，从当前阶段继续推进。不得因为用户插话就退化到普通聊天模式。
 6. **分类由主编排者亲自做，计划每类独立出**。CATEGORY_DISCOVERY 是编排决策，严禁委托计划代理。BATCH_PLAN_BY_SUBAGENT = 每类一个独立计划代理调用（默认 DeepSeek V4 Pro planner，OpenCode/OMO 可用 hyperplan），严禁一个代理包揽所有类别。
 7. **用户反馈 bug/问题/没改好 ≠ 直接改代码**。即使用户说"这个没改好"、"XX 还是不行"、"这里还有问题"、"闪退"、"UI 不对"，也**必须**先写 `plan-input.md` 或 `PLAN_PATCH.md` 描述问题根因和修改方案，然后交 DeepSeek V4 Pro planner 审查或生成修订计划。主编排者**禁止**直接根据用户反馈动手改代码——即使用户描述的修改"看起来很简单"、"只是改一行"、"只是加个判断"、"不需要调研"。必须先产出书面方案 → planner 审查批准 → 再改代码。这条没有例外。
+8. **子代理派遣必须显式声明角色+模型**。每次用 Agent 工具 dispatch 子代理，**label 必须**用 `[角色:模型] 任务描述` 格式（见 `../_shared/SKILL_CORE.md` §5.2）。禁止省略模型名。主编排者自身**不是** planner、**不是** developer、**不是** reviewer——这些角色必须通过 Agent 工具派遣对应模型的子代理执行。
 
 ## 会话恢复协议 —— 每轮对话第一步，不可跳过
 
@@ -108,7 +109,7 @@ $ARGUMENTS
 ### `--orchestrator=claude`（默认）
 
 - 本会话（Claude）直做编排决策：需求理解、Research 事实判断、类别划分、wave 调度、返工归因、最终完成判断。
-- 默认模型路由：Claude Code 作为壳，MiniMax M3 承担日常主编排；DeepSeek V4 Pro 负责每类计划；Codex/GPT 负责二次计划审查和关键代码审查：第一轮审查用 GPT-5.4，第二轮复审/升级审查用 GPT-5.5。MiniMax M3 负责开发和测试。GPT/Codex 无额度时记录额度状态与待补审查，不阻塞 DeepSeek 计划 + MiniMax 开发/测试；等额度刷新后补审。
+- 默认模型路由：Claude Code 作为壳，MiniMax M3 承担日常主编排；DeepSeek V4 Pro 负责每类计划；Codex/GPT 负责二次计划审查和关键代码审查：第一轮审查用 GPT-5.4，第二轮复审/升级审查用 GPT-5.5。MiniMax M3 负责开发和测试。GPT/Codex 无额度时记录延期（仅审计追溯，不自动补跑），不阻塞 DeepSeek 计划 + MiniMax 开发/测试。
 - 若 OpenCode + oh-my-openagent 已经固定启用，不要重复造一套后台团队；把本 Skill 的核心规则写入 `AGENTS.md` / `.omo/rules/auto-dev.md`，让 OMO 的 rules injection 自动加载。
 - 两级升级：
   1. 第一轮返工不通过 → 自查归因（`RESEARCH_GAP` / `PLAN_GAP` / `STANDARD_MISMATCH` / `DEVELOPER_EXECUTION` / `TEST_SYSTEM_ISSUE` / `ENVIRONMENT_LIMIT`），记录改进项。
@@ -154,7 +155,7 @@ $ARGUMENTS
 | 测试代理 | MiniMax M3 | 构建、测试、验收、复验，不默认改生产代码。 |
 | 更高风险增强 | GPT（有额度时） | 在 Codex 之外做架构级判断、最终兜底、复杂 bug 二次判断。 |
 
-Codex/GPT 是**二次计划审查与关键代码审查的首选代理**，但受额度限制。第一轮计划/代码审查用 GPT-5.4；第二轮复审、返工后复审、升级审查**必须**用 GPT-5.5（有额度时），**禁止**退回到 GPT-5.4。理由：GPT-5.4 已审过第一轮且没拦住问题，返工后再用 GPT-5.4 等于浪费额度。无额度时不让任务 blocked，而是记录 `CODEX_STATUS.json` / `GPT_REVIEW_STATUS.json` 与 `DEFERRED_CODEX_REVIEW.md`，当前任务继续推进，等额度刷新后补跑延期审查。
+Codex/GPT 是**二次计划审查与关键代码审查的首选代理**，但受额度限制。第一轮计划/代码审查用 GPT-5.4；第二轮复审、返工后复审、升级审查**必须**用 GPT-5.5（有额度时），**禁止**退回到 GPT-5.4。理由：GPT-5.4 已审过第一轮且没拦住问题，返工后再用 GPT-5.4 等于浪费额度。无额度时不让任务 blocked，而是记录 `CODEX_STATUS.json` / `GPT_REVIEW_STATUS.json` 与 `DEFERRED_CODEX_REVIEW.md`（仅审计追溯），当前任务继续推进。
 
 ### 二次计划审查（强制）
 
@@ -246,16 +247,16 @@ Codex/GPT 是**二次计划审查与关键代码审查的首选代理**，但受
 
 Codex 只作为增强项；失败不等于流程失败。
 
-- PLAN_REVIEW 节点 Codex 无额度：记录待补计划审查，`plan_review_status = deferred_due_to_codex_quota`，不阻塞当前开发；额度刷新后补跑 Codex 审查。
+- PLAN_REVIEW 节点 Codex 无额度：记录延期，`plan_review_status = deferred_due_to_codex_quota`，不阻塞当前开发。延期仅审计追溯，不自动补跑。
 - CODE_REVIEW 节点 Codex 无额度：记录待补代码审查，继续使用默认代码审查与测试证据推进。
 - RESCUE 节点 Codex 无额度：不重复盲试，记录延期救火项，交由主编排做归因；必要时让 DeepSeek V4 Pro 重新修订计划。
 - 记录位置：`{STATE_DIR}/CODEX_STATUS.json` 和 `{STATE_DIR}/runs/<task-id>/DEFERRED_CODEX_REVIEW.md`。
-- 下次额度刷新后，主编排读取 deferred items 并优先补跑高风险类别。
+- 延期记录仅用于审计追溯。任务已通过 MiniMax 开发/测试完成交付，不自动补跑。
 
 ### Plan Agent 拒绝 / PLAN_GAP 处理
 
 - 第一次 `PLAN_GAP`：主编排者补充 `plan-input.md`，明确需求、文件范围、不可改区域和验收命令，再重跑同一个计划代理。
-- 第二次 `PLAN_GAP`：优先在同类别生产线内修改 `PLAN.md` 后再次调用 Codex 审查；Codex 无额度则记录延期，额度刷新后补审。
+- 第二次 `PLAN_GAP`：优先在同类别生产线内修改 `PLAN.md` 后再次调用 Codex 审查；Codex 无额度则记录延期（仅审计追溯）。
 - 第三次仍失败：进入 `blocked`，原因写 `PLAN_AGENT_REPEATED_PLAN_GAP`，需要用户补充需求或允许缩小范围。
 
 ## 入口规则
@@ -275,17 +276,21 @@ powershell -NoProfile -ExecutionPolicy Bypass -File "<project wrapper script>" -
 4. 读取环境报告（`.ai/ENVIRONMENT_REPORT.md` 或 `.collab/ENVIRONMENT_REPORT.md`）
 5. 后续流程见 `../_shared/SKILL_CORE.md`
 
-## 钩子自检（每次 Write/Edit/MultiEdit 前）
+## 钩子自检（每次 Write/Edit/Bash/Agent 前）
 
 ```
 □ 目标是否在 app/src/lib/core/packages/ 下？
   → current_phase 必须是 development/fixing/testing 且 plan_status = approved
 □ 目标是否是 plan.md / plan.meta.json？
-  → 主编排者禁止直接写，必须调用 DeepSeek V4 Pro planner / OpenCode-OMO plan wrapper
+  → 主编排者禁止直接写，必须 dispatch [planner:deepseek-v4-pro]
 □ 是否准备进入 development/fixing/testing？
   → plan_status 和 plan_review_status 都必须是 approved
 □ 命令是否包含 git merge/push/release/done？
   → 检查 verification-report.md 存在且 EXIT_CODE = 0
+□ 是否在 Agent dispatch？
+  → label 必须用 [角色:模型] 格式
+□ 是否在 Bash 调用 Codex？
+  → 必须先报告: 「Codex 调用: [用途, 模型:gpt-5.x, 输入, 预期输出]」
 ```
 
 ## ⛔ 工作树 commit 规范（强约束）
@@ -380,7 +385,7 @@ Android 专用命令、设备门禁、用户真机实测和 `DEVICE_TEST_STATUS`
 
 ```text
 CATEGORY_PLAN
--> CATEGORY_PLAN_REVIEW
+-> CATEGORY_PLAN_REVIEW   ← 只审一次（首次 gpt-5.4 / 返工 gpt-5.5）
 -> CATEGORY_TEST_TARGET
 -> IMPLEMENT_LOOP
 -> CATEGORY_TEST

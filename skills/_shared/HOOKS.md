@@ -60,7 +60,7 @@
 
 **默认计划**：DeepSeek V4 Pro planner。  
 **默认二次计划审查**：Codex reviewer；`PLAN.md` 生成后优先调用 Codex 输出 `PLAN_REVIEW.md`。Codex CLI 只能复用 Codex 自己的会话 / resume；跨 Claude/Codex/OpenCode 时通过文件交接。  
-**Codex 额度不足**：不阻塞当前开发；必须记录 `CODEX_STATUS.json` 与 `DEFERRED_CODEX_REVIEW.md`，并标记 `plan_review_status = deferred_due_to_codex_quota`，便于额度刷新后补跑。  
+**Codex 额度不足**：不阻塞当前开发；必须记录 `CODEX_STATUS.json` 与 `DEFERRED_CODEX_REVIEW.md`，并标记 `plan_review_status = deferred_due_to_codex_quota`。延期记录仅用于审计追溯，不自动补跑。  
 **GPT 增强**：只在有额度时启用，用于更高风险的计划复核、关键代码审查、复杂 bug 二次判断和最终兜底；不是必经流程。  
 **DeepSeek 计划入口不可用**：进入 `blocked`，原因 `NO_PLAN_AGENT_AVAILABLE`。禁止主编排者直接写正式 PLAN.md 或放行开发。
 

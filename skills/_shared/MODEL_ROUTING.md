@@ -6,23 +6,23 @@
 |---|---|
 | 日常主编排 | Claude Code 壳 + MiniMax M3 |
 | 计划代理 | DeepSeek V4 Pro |
-| 一轮计划审查 | Codex/GPT-5.4；输出 `PLAN_REVIEW.round1.gpt-5.4.md`；无额度时记录延期审查 |
-| 二轮计划复审 / 升级审查 | GPT-5.5；用于 planner 修订后复审、第二轮审查、多轮返工仍不收敛；无额度时记录延期，不设置替代 GPT 环节 |
+| 计划审查（首次交付） | Codex/GPT-5.4；输出 `PLAN_REVIEW.gpt-5.4.md`；无额度时记录延期审查 |
+| 计划审查（返工升级） | GPT-5.5；上一个交付周期用户反馈了 bug、planner 出了新的 PLAN/PLAN_PATCH 时使用；无额度时记录延期，不设置替代 GPT 环节 |
 | 开发代理 | MiniMax M3 |
 | 测试代理 | MiniMax M3 |
 | 更高风险增强 | GPT-5.5，有额度时才启用；无额度不阻塞 |
 
 ## 强制规则
 
-- 所有 auto-dev / auto-code-android-dev 任务在 `PLAN.md` 生成后都必须调用 Codex/GPT 做二次计划审查：第一轮 GPT-5.4，第二轮复审/升级审查 GPT-5.5；无额度则记录延期审查。
+- 所有 auto-dev / auto-code-android-dev 任务在 `PLAN.md` 生成后都必须调用 Codex/GPT 做计划审查：首次交付用 GPT-5.4，上个周期用户反馈 bug 后重新 plan 用 GPT-5.5；无额度则记录延期审查。
 - `PLAN.md` 生成后不得直接进入开发。
-- GPT/Codex 有额度时必须保留原始审查文件，至少包括 `PLAN_REVIEW.round1.gpt-5.4.md`；第二轮发生时必须保留 `PLAN_REVIEW.round2.gpt-5.5.md`。无额度时必须有 `DEFERRED_CODEX_REVIEW.md`，且 `plan_review_status = deferred_due_to_quota` 或 `deferred_due_to_codex_quota`。
-- 如果 `PLAN_REVIEW_STATUS = changes_required`，审查意见必须回传 planner；planner 输出 `PLAN_REVIEW_RESOLUTION.round1.md` 并修订 `PLAN.md` / `PLAN_PATCH.v2.md`，随后**必须**用 GPT-5.5 做第二轮复审（有额度时），通过后才能进入 `TEST_TARGET`。
-- **返工 = 升级审查**：用户反馈 bug 意味着第一轮实现已失败。失败过的计划/代码，第二轮审查**必须升级到 GPT-5.5**（有额度时），**禁止**再用 GPT-5.4 审第二轮。理由：GPT-5.4 已审过第一轮且没拦住问题，再问它等于浪费额度。
+- GPT/Codex 有额度时必须保留原始审查文件。无额度时必须有 `DEFERRED_CODEX_REVIEW.md`，且 `plan_review_status = deferred_due_to_quota` 或 `deferred_due_to_codex_quota`。
+- **返工 = 升级审查**：上一个交付周期用户反馈了 bug → 意味着之前的 plan+审查+实现链路已失败。planner 出的新 PLAN/PLAN_PATCH，审查**必须升级到 GPT-5.5**（有额度时），**禁止**再用 GPT-5.4。理由：GPT-5.4 已审过上一轮且没拦住问题，重复用它等于浪费额度。
 - Codex/GPT 是计划审查与关键代码审查的首选代理；没有额度时跳过并记录延期，不把任务置为 blocked，不临时指定别的模型自审。
-- 如果 Codex/GPT 因 usage limit 不可用，记录到 `{STATE_DIR}/CODEX_STATUS.json` / `GPT_REVIEW_STATUS.json` 和当前任务的 `DEFERRED_CODEX_REVIEW.md`，包含 `reset_at` / `next_retry_after`，下次额度刷新后补跑。
+- 如果 Codex/GPT 因 usage limit 不可用，记录到 `{STATE_DIR}/CODEX_STATUS.json` / `GPT_REVIEW_STATUS.json` 和当前任务的 `DEFERRED_CODEX_REVIEW.md`。延期记录仅用于审计追溯，**不自动补跑**——任务已通过 MiniMax 开发/测试完成并交付，事后补审旧计划无意义。
 - 计划阶段多审一次，优先于开发后返工。
 - **计划只有 DeepSeek V4 Pro 能做**：任何情况下（首次计划、返工修订、PLAN_PATCH、用户反馈后重计划），计划的生成和修订只能由 DeepSeek V4 Pro planner 执行。主编排者、Codex、GPT、MiniMax 均不得代写 PLAN 或 PLAN_PATCH。Codex/GPT 只能审，不能写。
+- **子代理派遣必须显式声明模型**：每次 Agent dispatch 的 label 必须用 `[角色:模型]` 格式（详见 SKILL_CORE.md §5.2）。主编排者自身不是 planner/developer/reviewer——必须 dispatch 对应模型的子代理。
 
 ## Codex 可选增强触发点
 
@@ -36,7 +36,7 @@ Codex 不可用时：不重复盲试、不阻塞 DeepSeek 计划 + MiniMax 开�
 
 ## 生产线规则
 
-- 同一类别是一条串行生产线：`PLAN -> PLAN_REVIEW.round1.gpt-5.4 -> PLAN_REVIEW_RESOLUTION(if needed) -> PLAN_REVIEW.round2.gpt-5.5(if needed/available) -> TEST_TARGET -> IMPLEMENT -> TEST -> CODE_REVIEW -> ACCEPTANCE`。
+- 同一类别是一条串行生产线：`PLAN -> PLAN_REVIEW(gpt-5.4首次/gpt-5.5返工) -> TEST_TARGET -> IMPLEMENT -> TEST -> CODE_REVIEW -> ACCEPTANCE`。每个交付周期只审一次，模型选择看是首次交付还是返工。
 - 同类串行，不同类并行；不同类别低耦合时最多 5 路并行。
 - 二次计划审查、代码审查、多次救火默认复用同类别文件化上下文；会话复用只发生在同一责任身份内：原 developer 返工，原 reviewer/tester 复验关闭，原 planner 接收 Codex 审查意见，裁决并修订 PLAN/PLAN_PATCH；跨身份或跨框架只做文件交接。
 - 只有用户开始下一批需求、显式结束上个对话、上下文污染、原会话不可恢复、跨类别架构判断或多轮同错不收敛时，才切新会话。

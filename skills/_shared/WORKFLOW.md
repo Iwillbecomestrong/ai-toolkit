@@ -34,7 +34,7 @@ INIT
 2. N 个类别 = N 次计划代理调用；默认 DeepSeek V4 Pro planner，OpenCode + oh-my-openagent 场景可用 `hyperplan` / team plan 承载。
 3. 每个计划代理只看到自己类别的需求、涉及文件、约束条件。
 4. 每个类别产出独立的 `PLAN.md` + `plan.meta.json`。
-5. 每个类别计划生成后，必须进入 MANDATORY_PLAN_REVIEW：第一轮优先调用 Codex/GPT-5.4 审查 `PLAN.md`；若 changes_required，planner 裁决并修订后，第二轮优先调用 GPT-5.5 复审。跨 Claude/Codex/OpenCode 时通过文件交接。GPT/Codex 无额度时记录延期审查，不阻塞当前开发；额度刷新后补跑。
+5. 每个类别计划生成后，必须进入 MANDATORY_PLAN_REVIEW：第一轮优先调用 Codex/GPT-5.4 审查 `PLAN.md`；若 changes_required，planner 裁决并修订后，第二轮优先调用 GPT-5.5 复审。跨 Claude/Codex/OpenCode 时通过文件交接。GPT/Codex 无额度时记录延期审查，不阻塞当前开发。延期记录仅用于审计追溯，不自动补跑。
 6. 主编排者逐个 review `PLAN.md` + `PLAN_REVIEW.md`，检查跨类接口一致性，批准后进入 WAVE_LOOP。
 7. **严禁**一个计划代理包揽所有类别的计划（会导致上下文污染、计划质量下降）。
 
@@ -53,15 +53,13 @@ WAVE_PREPARE
 ```text
 CATEGORY_START
   -> CATEGORY_PLAN
-  -> CATEGORY_PLAN_REVIEW      ← 第一轮 GPT-5.4 输出 PLAN_REVIEW；只提意见，不直接改 PLAN
-  -> CATEGORY_PLAN_REVIEW_RESOLUTION  ← 若 changes_required，回传 planner 裁决并修订 PLAN/PLAN_PATCH
-  -> CATEGORY_PLAN_REVIEW_ROUND2      ← 第二轮 GPT-5.5 复审修订后的 PLAN/PLAN_PATCH（有额度时）
+  -> CATEGORY_PLAN_REVIEW      ← 审一次：首次交付 gpt-5.4，返工周期 gpt-5.5
   -> CATEGORY_TEST_TARGET      ← 先确定测试/验收靶子
   -> IMPLEMENT_LOOP            ← 先写失败测试/最小复现/可执行验证脚本，再写实现
   -> CATEGORY_TEST
   -> CATEGORY_CODE_REVIEW      ← 同一类别生产线内代码审查；Codex 有额度时可在此节点审关键 diff
   -> CATEGORY_ACCEPTANCE
-  -> USER_DEVICE_ACCEPTANCE    ← Android/真机实测子阶段，不是必须新增 STATE 枚举
+  -> USER_DEVICE_ACCEPTANCE    ← Android/真机实测子阶段
   -> CATEGORY_CLOSE
 ```
 
@@ -70,8 +68,9 @@ CATEGORY_START
 每个类别是一条串行生产线，不是一组可以在同类内部并行乱跑的子任务：
 
 ```text
-同一类别生产线：
-PLAN -> PLAN_REVIEW.round1.gpt-5.4 -> PLAN_REVIEW_RESOLUTION(if needed) -> PLAN_REVIEW.round2.gpt-5.5(if needed/available) -> TEST_TARGET -> IMPLEMENT -> TEST -> CODE_REVIEW -> ACCEPTANCE -> FOLLOWUP/REPAIR
+同一类别生产线（每个交付周期只审一次）：
+首次交付: PLAN -> PLAN_REVIEW(gpt-5.4) -> TEST_TARGET -> IMPLEMENT -> TEST -> CODE_REVIEW -> ACCEPTANCE
+返工周期: PLAN_PATCH -> PLAN_REVIEW(gpt-5.5) -> TEST_TARGET -> IMPLEMENT -> TEST -> CODE_REVIEW -> ACCEPTANCE -> FOLLOWUP/REPAIR
 ```
 
 Codex/GPT 在对应工位介入：第一轮二次计划审查放在 `PLAN_REVIEW.round1.gpt-5.4`，第二轮复审/升级审查放在 `PLAN_REVIEW.round2.gpt-5.5`，代码审查放在 `CODE_REVIEW`，复杂救火放在 `FOLLOWUP/REPAIR`。无额度时记录 `{STATE_DIR}/CODEX_STATUS.json` / `GPT_REVIEW_STATUS.json` 和 `DEFERRED_CODEX_REVIEW.md`，不改变生产线顺序，也不阻塞 DeepSeek 计划 + MiniMax 开发/测试流程。
@@ -199,7 +198,7 @@ TEST_FAIL or ACCEPTANCE_FAIL or INDEPENDENT_REVIEW_FAIL
 
 规则：
 
-- **返工 = 升级审查**：用户反馈 bug / 第一次实现未通过 → 意味着第一轮计划+审查+实现链路已失败。修订后的 PLAN/PLAN_PATCH 第二轮审查**必须**用 GPT-5.5（有额度时），**禁止**再用 GPT-5.4——GPT-5.4 已审过第一轮且没拦住问题，返工后重复用它等于浪费额度。无额度时记录延期到 `DEFERRED_CODEX_REVIEW.md`，额度刷新后补 GPT-5.5 审查。
+- **返工 = 升级审查**：用户反馈 bug / 第一次实现未通过 → 意味着第一轮计划+审查+实现链路已失败。修订后的 PLAN/PLAN_PATCH 第二轮审查**必须**用 GPT-5.5（有额度时），**禁止**再用 GPT-5.4——GPT-5.4 已审过第一轮且没拦住问题，返工后重复用它等于浪费额度。无额度时记录延期到 `DEFERRED_CODEX_REVIEW.md`（仅审计追溯，不自动补跑）。
 - **计划审查回传**：GPT-5.4 / reviewer 负责第一轮提出计划问题，不直接改 PLAN；`changes_required` 必须回传原 planner，由 planner 判断是否成立并修订 `PLAN.md` / `PLAN_PATCH.md`；修订后**必须**由 GPT-5.5 做第二轮复审（有额度时），再进入测试靶子和开发。**禁止**用 GPT-5.4 做第二轮——第一轮已失败，GPT-5.4 已证明拦不住问题，第二轮必须升级模型。
 - 谁开发谁修改；同类别/同模块默认回原开发会话继续，有始有终。
 - 谁发现谁验证到关闭；原测试/用户实测反馈优先由原发现链路复验。

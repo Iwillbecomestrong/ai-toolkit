@@ -235,6 +235,80 @@ blocked:
 
 主编排只需要收到进度摘要：当前步骤、关键文件路径、commit hash、阻塞点、下一步。长文档仍以文件为准。
 
+### 5.2 子代理派遣协议 —— Agent label 必须显式声明角色+模型
+
+每次用 Agent 工具派遣子代理时，**label 字段必须**使用以下格式，不得省略模型名：
+
+```
+[角色:模型] 任务简述
+```
+
+**Agent 派遣**（通过 Agent 工具）：
+
+| 角色 | 强制 label 前缀 | 说明 |
+|---|---|---|
+| 计划代理 | `[planner:deepseek-v4-pro]` | 生成/修订 PLAN.md、PLAN_PATCH.md |
+| 开发代理 | `[developer:minimax-m3]` | 按已批准 PLAN 实现代码、自测、原子 commit |
+| 测试代理 | `[tester:minimax-m3]` | 构建、测试、验收、复验，不改生产代码 |
+| 调研代理 | `[researcher:minimax-m3]` | 目录整理、文件定位、调用链梳理 |
+| 一轮计划审查 | `[reviewer:gpt-5.4]` | 第一轮审查 PLAN.md，输出 PLAN_REVIEW.round1 |
+| 二轮复审/升级审查 | `[reviewer:gpt-5.5]` | 返工后第二轮复审，禁止退回 gpt-5.4 |
+| 代码审查 | `[code-reviewer:gpt-5.4]` | 审查关键 diff / 高风险代码 |
+
+**Codex CLI 调用**（通过 Bash 工具，走 `run-codex-*.ps1`）：
+
+| 用途 | 触发时机 | Wrapper + 模型 | 输出文件 |
+|---|---|---|---|
+| Codex 计划审查 | PLAN.md 首次生成后 | `run-codex-review.ps1` **`-Model gpt-5.4`** | `PLAN_REVIEW.gpt-5.4.md` |
+| Codex 计划审查 **（升级）** | **上个交付周期用户反馈了 bug**，planner 出了新的 PLAN/PLAN_PATCH | `run-codex-review.ps1` **`-Model gpt-5.5`**（禁止退回 gpt-5.4） | `PLAN_REVIEW.gpt-5.5.md` |
+| Codex 代码审查 | 实现+测试完成后 | `run-codex-code-review.ps1` **`-Model gpt-5.4`** | `CODE_REVIEW.gpt-5.4.md` |
+| Codex 救火 | 多轮返工仍失败、根因不清 | `run-codex-rescue.ps1` **`-Model gpt-5.5`** | `RESCUE_REPORT.md` |
+
+**"一轮"和"二轮"不是同一个 plan 来回审，而是不同的交付周期**：
+
+```
+交付周期 1:  PLAN → gpt-5.4 审一次 → 改 → 实现 → 测试 → 交付
+                                                           ↓
+                                               用户反馈 bug（第一轮交付失败）
+                                                           ↓
+交付周期 2:  PLAN_PATCH → gpt-5.5 审（升级！因为第一次没拦住）→ 改 → 实现 → 测试 → 交付
+```
+
+| 场景 | 模型 | 原因 |
+|---|---|---|
+| 全新任务、首次出 PLAN | `gpt-5.4` | 正常审查 |
+| **上个周期用户反馈了 bug**，planner 出了新的 PLAN/PLAN_PATCH | `gpt-5.5` | 上一轮 gpt-5.4 没拦住，升级模型 |
+| 同一类别之前交付过但返工了 → 再次审查 | `gpt-5.5` | 同上，已失败的链路必须升级 |
+
+> **简单记法**：第一次交付 = gpt-5.4 审。用户说没改好 → 第二次交付 = gpt-5.5 审。 |
+
+**Codex 调用强制规则**：
+
+- 主编排者在 Bash 执行 Codex 命令前，**必须先向用户报告**：`Codex 调用: [用途, 模型: gpt-5.4/gpt-5.5, 输入文件, 预期输出文件]`
+- Codex 返回后，必须展示 stdout 中的模型标识行
+- 禁止黑箱调用 Codex——用户必须能看到用的是哪个模型
+
+**示例**：
+
+```
+Agent label: "[planner:deepseek-v4-pro] 为 CAT-1 (锁屏闹钟UI修复) 生成 PLAN.md"
+Agent label: "[reviewer:gpt-5.4] 审查 CAT-1 PLAN.md — 需求覆盖+文件范围+测试先行+风险"
+Agent label: "[reviewer:gpt-5.5] 复审 CAT-1 PLAN_PATCH.v2.md — 第一轮未通过的返工审查"
+Agent label: "[developer:minimax-m3] 实现 CAT-1 — 按 PLAN.md 修改 window_alarm_overlay.xml"
+Agent label: "[tester:minimax-m3] 验收 CAT-1 — 构建+ADB安装+logcat验证"
+
+Codex 调用: [plan-review:codex-gpt-5.4] 输入 CAT-1/PLAN.md → 预期输出 CAT-1/PLAN_REVIEW.round1.gpt-5.4.md
+Codex 调用: [plan-review:codex-gpt-5.5] 复审 CAT-1/PLAN_PATCH.v2.md → 预期输出 CAT-1/PLAN_REVIEW.round2.gpt-5.5.md
+```
+
+**禁止**：
+- 省略模型名：`[planner]` ❌ → 必须写 `[planner:deepseek-v4-pro]`
+- 主编排者自己当 planner：不得用 `[planner:minimax-m3]` 或 `[planner:claude]`——计划只有 DeepSeek V4 Pro 能做
+- 主编排者自己当 developer：主编排者**不是 developer**，源码修改必须 dispatch `[developer:minimax-m3]`
+- 返工后用 gpt-5.4 审查第二轮：第一轮失败的，第二轮必须升级到 `[reviewer:gpt-5.5]`
+- 主编排者直接 Write/Edit 源码代替 dispatch developer：这会触发 Gate 1 阻断（如果 plan_review_status 不是 approved）
+- Codex 黑箱调用：不报告模型、不展示 stdout 模型标识行 ❌
+
 ## 6. 状态文件
 
 主状态优先使用（`{STATE_DIR}` 由调用方 SKILL.md 定义）：

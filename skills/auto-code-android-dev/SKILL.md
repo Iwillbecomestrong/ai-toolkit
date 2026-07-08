@@ -41,6 +41,7 @@ $ARGUMENTS
 5. **用户中途补充信息 ≠ 退出流程**。即使用户插话补充需求、提问或纠正，流程不会取消。收到任何消息后，第一步永远是读取 STATE.json 恢复状态，从当前阶段继续推进
 6. **分类由主编排者亲自做，计划每类独立出**。CATEGORY_DISCOVERY 是编排决策，严禁委托计划代理。BATCH_PLAN_BY_SUBAGENT = 每类一个独立计划代理调用（默认 DeepSeek V4 Pro planner，OpenCode/OMO 可用 hyperplan），严禁一个代理包揽全部类别
 7. **用户反馈 bug/问题/没改好 ≠ 直接改代码**。即使用户说"这个没改好"、"XX 还是不行"、"闪退"、"UI 不对"，也**必须**先写 `plan-input.md` 或 `PLAN_PATCH.md` 描述问题根因和修改方案，然后交 DeepSeek V4 Pro planner 审查或生成修订计划。主编排者**禁止**直接根据用户反馈动手改代码。即使"只改一行"、"只是加个判断"也不得跳过。必须先产出书面方案 → planner 审查批准 → 再改代码。
+8. **子代理派遣必须显式声明角色+模型**。每次用 Agent 工具 dispatch 子代理，**label 必须**用 `[角色:模型] 任务描述` 格式（见 `../_shared/SKILL_CORE.md` §5.2）。禁止省略模型名。主编排者自身**不是** planner、**不是** developer、**不是** reviewer——这些角色必须通过 Agent 工具派遣对应模型的子代理执行。
 
 ## ⛔ Android 工作树 + 编译 强约束
 
