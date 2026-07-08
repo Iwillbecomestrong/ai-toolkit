@@ -19,6 +19,7 @@ import os
 import sys
 from pathlib import Path
 from datetime import datetime
+import re
 
 
 # ── phase enum ──────────────────────────────────────────────────
@@ -48,6 +49,17 @@ LONG_DOCS = {
     "review.md", "REVIEW.md",
     "independent-review.md", "INDEPENDENT_REVIEW.md"
 }
+
+READ_ONLY_BASH_PATTERNS = [
+    "rg ", "rg.exe ", "grep ", "findstr ", "select-string ",
+    "get-content ", "type ", "cat ", "less ", "more ",
+    "get-childitem", "ls ", "dir ", "pwd", "git status", "git diff"
+]
+
+CODEX_PLAN_COMMAND_PATTERNS = [
+    "run-codex-plan.ps1",
+    "run-codex-plan",
+]
 
 # ── dev keywords for UserPromptSubmit auto-init ─────────────────
 DEV_KEYWORDS = [
@@ -90,6 +102,73 @@ def load_state(state_dir):
     return load_json(state_path)
 
 
+def project_root_from_state_dir(state_dir):
+    """Infer project root from configured state dir (.ai-work / .collab-work)."""
+    return str(Path(state_dir).resolve().parent)
+
+
+def parse_status_markdown(status_path):
+    """Parse simple `STATUS.md` bullet fields into a dict."""
+    try:
+        content = Path(status_path).read_text(encoding="utf-8", errors="ignore")
+    except FileNotFoundError:
+        return {}
+
+    fields = {}
+    pattern = re.compile(r"^- `([^`]+)`\s*(.+)?$", re.MULTILINE)
+    for match in pattern.finditer(content):
+        raw_key = match.group(1).strip()
+        raw_value = (match.group(2) or "").strip()
+        key = raw_key.rstrip(":").strip()
+        value = raw_value.strip()
+        if value.startswith("`") and value.endswith("`") and len(value) >= 2:
+            value = value[1:-1]
+        fields[key] = value
+    return fields
+
+
+def is_terminal_task_stage(stage):
+    """Best-effort terminal stage detection for .ai/tasks STATUS.md."""
+    stage_upper = (stage or "").upper()
+    terminal_markers = ["COMPLETE", "COMPLETED", "DONE", "BLOCKED", "WAITING_USER_ACCEPTANCE"]
+    return any(marker in stage_upper for marker in terminal_markers)
+
+
+def discover_active_task_context(state_dir):
+    """Discover latest active .ai/tasks task when legacy STATE.json is absent."""
+    project_root = Path(project_root_from_state_dir(state_dir))
+    tasks_root = project_root / ".ai" / "tasks"
+    if not tasks_root.exists():
+        return None
+
+    candidates = []
+    for task_dir in tasks_root.iterdir():
+        if not task_dir.is_dir():
+            continue
+        status_path = task_dir / "STATUS.md"
+        if not status_path.exists():
+            continue
+        status_fields = parse_status_markdown(status_path)
+        current_stage = status_fields.get("current_stage", "")
+        candidates.append({
+            "task_dir": str(task_dir),
+            "status_path": str(status_path),
+            "task_id": status_fields.get("task_id", task_dir.name),
+            "current_stage": current_stage,
+            "has_plan_file": (task_dir / "PLAN.md").exists(),
+            "has_current_codex_run": (task_dir / "CURRENT_CODEX_RUN.json").exists(),
+            "is_terminal": is_terminal_task_stage(current_stage),
+            "last_write_time": task_dir.stat().st_mtime,
+        })
+
+    if not candidates:
+        return None
+
+    non_terminal = [c for c in candidates if not c["is_terminal"]]
+    selected = sorted(non_terminal or candidates, key=lambda item: item["last_write_time"], reverse=True)[0]
+    return selected
+
+
 def load_plan_meta(state):
     """Load plan.meta.json if plan_meta_file is set in state."""
     meta_path = state.get("plan_meta_file", "")
@@ -122,6 +201,18 @@ def is_long_doc(file_path):
     """Check if file_path is a long document orchestrator must not copy."""
     name = os.path.basename(file_path).lower()
     return name in LONG_DOCS
+
+
+def is_codex_plan_command(command):
+    """Check whether a bash command is invoking the Codex planner wrapper."""
+    cmd_lower = (command or "").replace("\\", "/").lower()
+    return any(pattern in cmd_lower for pattern in CODEX_PLAN_COMMAND_PATTERNS)
+
+
+def is_read_only_bash_command(command):
+    """Allow obvious read-only inspection commands before plan generation."""
+    cmd_lower = (command or "").replace("\\", "/").lower().strip()
+    return any(pattern in cmd_lower for pattern in READ_ONLY_BASH_PATTERNS)
 
 
 def has_verification(state_dir):
@@ -268,15 +359,181 @@ def gate_orchestrator_no_long_doc_copy(hook_input, state, state_dir):
 
 
 # ═══════════════════════════════════════════════════════════════════
+#  GATE 5: Working tree hygiene - prevent accumulating uncommitted changes
+# ═══════════════════════════════════════════════════════════════════
+# Prevents the failure mode where Agent modifies 100+ lines and then
+# session/linter/editor interruption wipes out the entire working tree.
+# Triggers: 任何 git commit/push/merge 前, 检查 working tree 是否有未相关改动
+def gate_working_tree_hygiene(hook_input, state, state_dir):
+    import subprocess
+    command = hook_input.get("command", "") or hook_input.get("bash_command", "")
+    if not command:
+        return True, ""
+
+    cmd_lower = command.lower()
+    # 只在 commit/push/merge/release 时触发
+    triggers = ["git commit", "git push", "git merge", "release ", "assemblerelease"]
+    if not any(t in cmd_lower for t in triggers):
+        return True, ""
+
+    # 找到项目根
+    project_root = state.get("project_root") or state_dir
+    if not project_root or not os.path.isdir(project_root):
+        return True, ""  # 找不到项目根, 跳过检查
+
+    try:
+        result = subprocess.run(
+            ["git", "status", "--short"],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode != 0:
+            return True, ""  # git 失败, 跳过 (可能是非 git 项目)
+
+        lines = [l for l in result.stdout.splitlines() if l.strip()]
+        if not lines:
+            return True, ""  # working tree 干净, 通过
+
+        # 检查是否所有改动都被精确 add 了
+        # 如果有 `git add` 命令, 提取被 add 的文件
+        added_files = set()
+        import re
+        for m in re.finditer(r"git\s+add\s+([^\n&|;]+)", command):
+            for f in m.group(1).split():
+                if not f.startswith("-"):  # 排除 -A, -f 等 flag
+                    added_files.add(f)
+
+        unstaged = []
+        for line in lines:
+            if line.startswith("M ") or line.startswith("??"):
+                # 第一个空格后是路径
+                path = line[3:].strip()
+                # ?? 路径前有 "?? " (含 untracked)
+                if line.startswith("??"):
+                    path = line[3:].strip()
+                else:
+                    path = line[3:].strip()
+                if not path:
+                    continue
+                # 如果这个文件不在要 add 的列表里, 阻断
+                if not any(path.endswith(a) or a in path or path == a for a in added_files):
+                    unstaged.append(line)
+
+        if unstaged:
+            return False, (
+                f"GATE 5 BLOCKED: working tree 有未相关改动:\n" +
+                "\n".join(f"  {l}" for l in unstaged[:10]) +
+                "\n请先精确 git add + git commit, 或通知用户决定 pre-existing 改动."
+            )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        pass
+
+    return True, ""
+
+
+def gate_task_source_edit_requires_codex_plan(hook_input, task_context):
+    tool_name = hook_input.get("tool_name", "")
+    if tool_name not in ("Write", "Edit", "MultiEdit"):
+        return True, ""
+
+    file_path = hook_input.get("file_path", "") or hook_input.get("path", "")
+    if not is_source_path(file_path):
+        return True, ""
+
+    if task_context.get("has_plan_file"):
+        return True, ""
+
+    return False, (
+        f"TASK GATE BLOCKED: 当前活跃任务 {task_context.get('task_id')} 还没有 Codex 生成的 PLAN.md。"
+        f"请先运行 scripts/auto-code-android-dev/run-codex-plan.ps1。"
+    )
+
+
+def gate_task_bash_requires_codex_plan(hook_input, task_context):
+    tool_name = hook_input.get("tool_name", "")
+    if tool_name != "Bash":
+        return True, ""
+
+    if task_context.get("has_plan_file"):
+        return True, ""
+
+    command = hook_input.get("command", "") or hook_input.get("bash_command", "")
+    if not command:
+        return True, ""
+
+    if is_codex_plan_command(command):
+        return True, ""
+
+    if is_read_only_bash_command(command):
+        return True, ""
+
+    return False, (
+        f"TASK GATE BLOCKED: 当前活跃任务 {task_context.get('task_id')} 缺少 Codex 计划。"
+        f"在继续执行非只读命令前，必须先运行 run-codex-plan.ps1 生成 PLAN.md。"
+    )
+
+
+def gate_task_agent_requires_codex_plan_script(hook_input, task_context):
+    tool_name = hook_input.get("tool_name", "")
+    if tool_name not in ("Agent", "SendMessage"):
+        return True, ""
+
+    if task_context.get("has_plan_file"):
+        return True, ""
+
+    return False, (
+        f"TASK GATE BLOCKED: 当前活跃任务 {task_context.get('task_id')} 还没有 Codex 计划。"
+        "禁止用 Agent/SendMessage 后台代替 Codex planner；必须先前台运行 run-codex-plan.ps1。"
+    )
+
+
+# ═══════════════════════════════════════════════════════════════════
 #  PreToolUse dispatcher
 # ═══════════════════════════════════════════════════════════════════
+def is_legacy_auto_dev_active(state, state_dir):
+    """Check if legacy auto-dev STATE.json mode is currently active."""
+    state_path = os.path.join(state_dir, "STATE.json")
+    if not os.path.exists(state_path):
+        return False
+    if not state or not state.get("task_id"):
+        return False
+    return True
+
+
+def is_auto_dev_active(state, state_dir):
+    """Check if any supported auto-dev mode is active."""
+    if is_legacy_auto_dev_active(state, state_dir):
+        return True
+    return discover_active_task_context(state_dir) is not None
+
+
 def handle_pretooluse(hook_input, state, state_dir):
-    gates = [
-        ("GATE_1", gate_no_edit_without_plan),
-        ("GATE_2", gate_orchestrator_no_plan_write),
-        ("GATE_3", gate_no_commit_without_verification),
-        ("GATE_4", gate_orchestrator_no_long_doc_copy),
-    ]
+    legacy_active = is_legacy_auto_dev_active(state, state_dir)
+    task_context = None if legacy_active else discover_active_task_context(state_dir)
+
+    # Only apply gates when auto-dev is actively running
+    if not legacy_active and not task_context:
+        return {"decision": "allow", "reason": "auto-dev not active — guard skipped", "hook_type": "pretooluse"}
+
+    if task_context:
+        gates = [
+            ("TASK_GATE_PLAN_AGENT", lambda hook, _state, _state_dir: gate_task_agent_requires_codex_plan_script(hook, task_context)),
+            ("TASK_GATE_PLAN_BASH", lambda hook, _state, _state_dir: gate_task_bash_requires_codex_plan(hook, task_context)),
+            ("TASK_GATE_PLAN_EDIT", lambda hook, _state, _state_dir: gate_task_source_edit_requires_codex_plan(hook, task_context)),
+            ("GATE_2", gate_orchestrator_no_plan_write),
+            ("GATE_4", gate_orchestrator_no_long_doc_copy),
+            ("GATE_5", gate_working_tree_hygiene),
+        ]
+    else:
+        gates = [
+            ("GATE_1", gate_no_edit_without_plan),
+            ("GATE_2", gate_orchestrator_no_plan_write),
+            ("GATE_3", gate_no_commit_without_verification),
+            ("GATE_4", gate_orchestrator_no_long_doc_copy),
+            ("GATE_5", gate_working_tree_hygiene),
+        ]
 
     for gate_name, gate_fn in gates:
         allowed, reason = gate_fn(hook_input, state, state_dir)
@@ -301,6 +558,24 @@ def handle_pretooluse(hook_input, state, state_dir):
 #  Stop Hook — lightweight reminder
 # ═══════════════════════════════════════════════════════════════════
 def handle_stop(hook_input, state, state_dir):
+    # Only remind when auto-dev is actively running
+    task_context = discover_active_task_context(state_dir)
+    if not is_auto_dev_active(state, state_dir):
+        return {"decision": "allow", "reason": "auto-dev not active", "hook_type": "stop"}
+
+    if not is_legacy_auto_dev_active(state, state_dir) and task_context:
+        current_stage = task_context.get("current_stage", "unknown")
+        if task_context.get("has_current_codex_run"):
+            runtime_hint = "当前任务已有 CURRENT_CODEX_RUN.json，可优先据此恢复 Codex 状态。"
+        else:
+            runtime_hint = "当前任务还没有 CURRENT_CODEX_RUN.json；若正在补计划，优先检查是否已运行 run-codex-plan.ps1。"
+        return {
+            "decision": "allow",
+            "reason": f"当前任务阶段: {current_stage}。{runtime_hint}",
+            "hook_type": "stop",
+            "warning": True,
+        }
+
     current_phase = state.get("current_phase", "intake")
     verification_status = state.get("verification_status", "pending")
 
@@ -341,7 +616,21 @@ def handle_userpromptsubmit(hook_input, state, state_dir):
     if not triggered:
         return {"decision": "allow", "reason": "no dev keywords", "hook_type": "userpromptsubmit"}
 
-    # Check if state already exists
+    active_task = discover_active_task_context(state_dir)
+    if active_task:
+        reminder = (
+            f"auto-dev 任务模式提醒：当前活跃任务 {active_task.get('task_id')}，"
+            f"阶段 {active_task.get('current_stage') or 'unknown'}。"
+            "若缺少 PLAN.md，下一步必须先运行 run-codex-plan.ps1。"
+        )
+        return {
+            "decision": "allow",
+            "reason": reminder,
+            "hook_type": "userpromptsubmit",
+            "state_exists": False
+        }
+
+    # Check if legacy state already exists
     state_path = os.path.join(state_dir, "STATE.json")
     if os.path.exists(state_path):
         reminder = (
@@ -386,6 +675,9 @@ def handle_userpromptsubmit(hook_input, state, state_dir):
 #  Main
 # ═══════════════════════════════════════════════════════════════════
 def main():
+    # Suppress stderr — Claude Code hook reads stdout as JSON, any stderr breaks parsing
+    sys.stderr = open(os.devnull, 'w')
+
     if len(sys.argv) < 3:
         print(json.dumps({
             "decision": "deny",
@@ -421,7 +713,11 @@ def main():
         sys.exit(0)
 
     result = handler(hook_input, state, state_dir)
-    print(json.dumps(result, ensure_ascii=False))
+    # Claude Code hook expects {"continue": true/false}
+    if result.get("decision") == "allow":
+        print(json.dumps({"continue": True}, ensure_ascii=False))
+    else:
+        print(json.dumps({"continue": False, "reason": result.get("reason", "blocked")}, ensure_ascii=False))
     sys.exit(0 if result.get("decision") == "allow" else 1)
 
 
