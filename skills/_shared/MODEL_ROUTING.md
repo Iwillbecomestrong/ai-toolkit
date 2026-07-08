@@ -6,15 +6,16 @@
 |---|---|
 | 日常主编排 | Claude Code 壳 + MiniMax M3 |
 | 计划代理 | DeepSeek V4 Pro |
-| 计划审查（首次交付） | Codex/GPT-5.4；输出 `PLAN_REVIEW.gpt-5.4.md`；无额度时记录延期审查 |
-| 计划审查（返工升级） | GPT-5.5；上一个交付周期用户反馈了 bug、planner 出了新的 PLAN/PLAN_PATCH 时使用；无额度时记录延期，不设置替代 GPT 环节 |
+| 计划审查（首次交付） | **唯一 Codex CLI**（内部 gpt-5.4）；输出 `PLAN_REVIEW.gpt-5.4.md`；无额度时记录延期审查。**Claude 模型 (opus/sonnet/haiku/fable) 禁止做 reviewer** |
+| 计划审查（返工升级） | **唯一 Codex CLI**（内部 gpt-5.5）；上一个交付周期用户反馈了 bug、planner 出了新的 PLAN/PLAN_PATCH 时使用；无额度时记录延期，不设置替代 GPT 环节。**Claude 模型禁止做 reviewer** |
 | 开发代理 | MiniMax M3 |
 | 测试代理 | MiniMax M3 |
 | 更高风险增强 | GPT-5.5，有额度时才启用；无额度不阻塞 |
 
 ## 强制规则
 
-- 所有 auto-dev / auto-code-android-dev 任务在 `PLAN.md` 生成后都必须调用 Codex/GPT 做计划审查：首次交付用 GPT-5.4，上个周期用户反馈 bug 后重新 plan 用 GPT-5.5；无额度则记录延期审查。
+- **reviewer 唯一 = Codex CLI**（内部 gpt-5.4 或 gpt-5.5）。Claude 模型 (opus, sonnet, haiku, fable) **禁止**承担 reviewer 角色。主编排者不得用任何 Claude 模型自审 plan 或自审代码。Codex 没额度 → 记录 `DEFERRED_CODEX_REVIEW.md`，不找 Claude 替代审查。
+- 所有 auto-dev / auto-code-android-dev 任务在 `PLAN.md` 生成后都必须调用 Codex 做计划审查：首次交付用 gpt-5.4，上个周期用户反馈 bug 后重新 plan 用 gpt-5.5；无额度则记录延期审查。
 - `PLAN.md` 生成后不得直接进入开发。
 - GPT/Codex 有额度时必须保留原始审查文件。无额度时必须有 `DEFERRED_CODEX_REVIEW.md`，且 `plan_review_status = deferred_due_to_quota` 或 `deferred_due_to_codex_quota`。
 - **返工 = 升级审查**：上一个交付周期用户反馈了 bug → 意味着之前的 plan+审查+实现链路已失败。planner 出的新 PLAN/PLAN_PATCH，审查**必须升级到 GPT-5.5**（有额度时），**禁止**再用 GPT-5.4。理由：GPT-5.4 已审过上一轮且没拦住问题，重复用它等于浪费额度。
