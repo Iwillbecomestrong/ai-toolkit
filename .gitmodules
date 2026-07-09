@@ -1,0 +1,6 @@
+[submodule "agent-memory"]
+	path = agent-memory
+	url = ./agent-memory.git
+[submodule "skills"]
+	path = skills
+	url = ./skills.git
