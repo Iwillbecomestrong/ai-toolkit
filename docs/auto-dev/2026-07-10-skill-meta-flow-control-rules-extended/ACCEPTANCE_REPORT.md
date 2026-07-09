@@ -69,7 +69,7 @@
 
 | sub-agent | role | session_id | model | effort | input_tokens | output_tokens | total_tokens | tool_uses | elapsed_seconds | files_touched | status |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---|---|
-| `[planner:codex]` | planner | skill-meta-flow-control-rules-extended-2026-07-10 | gpt-5.5 | high | TBD | TBD | TBD* | TBD | ~187* | `PLAN.md` (12024 bytes, 195 行) | completed (output_bytes=12024, wrapper_status=failed due to resume <id> bug) |
+| `[planner:codex]` | planner | skill-meta-flow-control-rules-extended-2026-07-10 | gpt-5.5 | high | 315408 | 6523 | 321931 | 7 turns | 181 | `PLAN.md` (12024 bytes, 195 行) + plan.meta.json | completed (wrapper_status=failed due to resume <id> bug; **实际成功**: cached=239232/75.8%, pay-as-go=83606 tokens) |
 | `[reviewer:deepseekV4pro]` | plan_reviewer | skill-meta-flow-control-rules-extended-2026-07-10 | fable | max | 65640 | TBD | 65640+ | 15 | 292 | (orchestrator_fallback_wrote `PLAN_REVIEW.md`) | silent_completed_then_orchestrator_fallback_to_write |
 | `[developer:minimax]` | developer | skill-meta-flow-control-rules-extended-2026-07-10 | minimax | high | TBD | TBD | TBD** | 95 | 603 | SKILL_CORE.md + MODEL_ROUTING.md + WORKFLOW.md + auto-dev/SKILL.md + IMPL_REPORT.md (across 6 CAT + 6 bump + 1 settle) | completed (14 atomic commits landed) |
 | `[tester:minimax]` (write) | tester | skill-meta-flow-control-rules-extended-2026-07-10 | minimax | medium | TBD | TBD | TBD** | 40 | 222 | TEST_TARGET.md (32810 bytes, 714 行, 20 tests / 17 AC) | completed |

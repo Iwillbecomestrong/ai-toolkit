@@ -331,7 +331,7 @@ agent_role_actual: developer (sub-agent, model=MiniMax-M3[1m] Claude shell defau
 
 | sub-agent | role | session_id | model | effort | input_tokens | output_tokens | total_tokens | tool_uses | elapsed_seconds | files_touched |
 |---|---|---|---|---|---:|---:|---:|---:|---:|---|
-| [planner:codex] | planner | skill-meta-flow-control-rules-extended-2026-07-10 | gpt-5.5 | high | TBD | TBD | TBD | TBD | TBD | PLAN.md + plan.meta.json |
+| [planner:codex] | planner | skill-meta-flow-control-rules-extended-2026-07-10 | gpt-5.5 | high | 315408 | 6523 | 321931 | 7 turns | 181 | PLAN.md (12024 bytes) + plan.meta.json |
 | [reviewer:deepseekV4pro] | plan_reviewer | skill-meta-flow-control-rules-extended-2026-07-10 | fable | max | 65640 | TBD | 65640+ | 15 | 292 | PLAN_REVIEW.md (orchestrator_fallback 代写) |
 | [developer:minimax] | developer | skill-meta-flow-control-rules-extended-2026-07-10 | minimax | high | TBD | TBD | TBD | TBD | TBD | _shared/SKILL_CORE.md + _shared/MODEL_ROUTING.md + _shared/WORKFLOW.md + auto-dev/SKILL.md |
 | [tester:minimax] | tester (write) | skill-meta-flow-control-rules-extended-2026-07-10 | minimax | medium | TBD | TBD | TBD | TBD | TBD | TEST_TARGET.md + TEST_REPORT.md |
