@@ -1,0 +1,18 @@
+=== T2-3.1: Q-8 并行/串行柔性化 ===
+397:│ ⑤ 流水线并行/串行柔性化 (Q-8):                                        │
+398:│    - 耦合度高 (共享文件 / 共享 state / 共享接口) → CHAIN_AFTER 串行   │
+399:│    - 耦合度低 (无共享文件 + 无共享 state + 无依赖) → PARALLEL_NEW_   │
+401:│    - 同类串行,异类并行:同一类别内部按生产线串行推进 (§1.1 WORKFLOW); │
+402:│      不同类别 + 低耦合才允许同批并行(最多 5 路,WORKFLOW §5)            │
+451:│   ③ PARALLEL_NEW_PIPELINE  —> 新建一条独立 pipeline,跟当前并行;     │
+453:│   ④ CHAIN_AFTER  —> 把新需求挂到当前 pipeline 之后,等上批跑完再动    │
+487:  - `UNRELATED` (新需求与当前 pipeline 完全不同模块 / 不同 state / 不同文件) → `PARALLEL_NEW_PIPELINE` (§0.10 ③)
+502:  2. 共享文件 ≥ 1 个 → 同类 / 必须串行依赖(CHAIN_AFTER 或同一 pipeline 内串行)。
+503:  3. 无共享文件 + 依赖方向无环 + 无共享 state → 可并行 (PARALLEL_NEW_PIPELINE)。
+509:**与 Q-8 关系**:Q-8 流水线并行/串行柔性化 + Q-12 file overlap 聚类 = 同一判定矩阵的两个轴 — file overlap 给"是否同类",Q-8 给"同类串行/异类并行"。
+525:### ③ PARALLEL_NEW_PIPELINE
+536:### ④ CHAIN_AFTER
+550:| "顺便把另一个文件 B 也修了" | `PARALLEL_NEW_PIPELINE` | 文件 B 跟当前 A 任务独立 |
+551:| "等先把 A 跑完再说 B" | `CHAIN_AFTER` | B 依赖 A 的状态/接口 |
+641:- **4 个基础 operator**(§0.10 ① ② ③ ④):REQUEUE / ABORT_TO_PLAN / PARALLEL_NEW_PIPELINE / CHAIN_AFTER
+908:3. 最多并行 5 个类别，但不能强行凑满；先画依赖图，再按耦合度、模型额度、验证压力动态决定 wave。默认建议 1–5 路。**同类串行，不同类并行**：只有低耦合的不同类别才允许同批并行。

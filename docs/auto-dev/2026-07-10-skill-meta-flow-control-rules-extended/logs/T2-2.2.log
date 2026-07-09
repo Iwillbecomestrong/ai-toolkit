@@ -1,0 +1,13 @@
+=== T2-2.2: Q-6 case A/B + sub-agent protocol ===
+340:│    - **等待用户**(waiting_user):sub-agent 报 AMBIGUITY_RAISED →       │
+485:  - 需求 **不明确 / 错误 / 含糊** → 立即 echo 追问,**不派任何 sub-agent** (case A 主编排自行判定)
+632:| **case A** 主编排自行判定 | 收到 user message 当时 | 主编排 | 立即 echo 追问, **不派任何 sub-agent** (走 §0.10 ⑥ DETECT_CONTRADICTION 的"含糊 → 追问"分支) |
+633:| **case B** sub-agent 发现 ambiguity | sub-agent 跑过程中发现需求不明确 / error / 文件冲突 | sub-agent | **不允许** 直接调 user-facing tool;在 structured report 加 `AMBIGUITY_RAISED: <问题>` 字段;主编排**代为** 问用户(grep `AMBIGUITY_RAISED`,有的话**当下 turn** echo 追问) |
+637:- 必须通过 structured report `AMBIGUITY_RAISED: <问题>` 字段回报
+638:- 主编排在 sub-agent 返回后立刻 grep `AMBIGUITY_RAISED`,有的话**当下 turn** echo 追问用户
+643:- 共 6 个 op;case A 主编排当下用 ⑥ 判定后映射到 1-5 任一基础 op;case B sub-agent 报告 `AMBIGUITY_RAISED` 后由主编排当下 turn 用 ⑥ 判定。
+667:- 同样适用于 case B 时代问(把用户的回复同时 append 到 USER_NEEDS_DIGEST.md)
+680:1. grep `AMBIGUITY_RAISED` 在最近 N 条 sub-agent report 里
+681:2. 如有 → emit "case B:sub-agent 代问"<当前问题>
+682:3. 主编排看到这条 emit 后,当下 turn 必须 echo 追问用户(走 §0.11.1 case B 路径)
+692:| **等待用户** (waiting_user) | sub-agent 报 `AMBIGUITY_RAISED` / case B 追问 | echo 追问用户,**不派任何 sub-agent**,等用户回 |

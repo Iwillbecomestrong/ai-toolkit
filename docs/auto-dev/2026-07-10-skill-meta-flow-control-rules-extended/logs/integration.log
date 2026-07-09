@@ -1,0 +1,96 @@
+=== 集成回归 (TEST_TARGET §6) ===
+
+===== A. scripts 自检 =====
+
+--- A.1 test_show_session_context.py ---
+...unknown subcommand: bogus
+.......[record] ghost not in registry; run init first
+..
+----------------------------------------------------------------------
+Ran 12 tests in 0.230s
+
+OK
+[init] codex-plan-main: model=codex scope=plan-review threshold=250k
+[init] deepseek-plan: model=deepseekV4pro scope=tier1-plan threshold=500k
+[init] claude-dev-cat-01: model=minimax scope=developer threshold=none
+[init] codex-plan-main: model=codex scope=plan-review threshold=250k
+[record] codex-plan-main: est=42k (delta=+42000, dispatch)
+[init] dev-1: model=minimax scope=developer threshold=none
+[record] dev-1: est=5k (delta=+5000, dispatch)
+[init] s1: model=codex scope=plan-review threshold=250k
+[record] s1: est=15k (delta=+15000, dispatch)
+[record] s1: est=23k (delta=+8000, return)
+[init] s1: model=codex scope=plan-review threshold=250k
+[record] s1: est=100 (delta=+100, step-0)
+[record] s1: est=200 (delta=+100, step-1)
+[record] s1: est=300 (delta=+100, step-2)
+[record] s1: est=400 (delta=+100, step-3)
+[record] s1: est=500 (delta=+100, step-4)
+[record] s1: est=600 (delta=+100, step-5)
+[record] s1: est=700 (delta=+100, step-6)
+[record] s1: est=800 (delta=+100, step-7)
+[record] s1: est=900 (delta=+100, step-8)
+[record] s1: est=1k (delta=+100, step-9)
+[record] s1: est=1k (delta=+100, step-10)
+[record] s1: est=1k (delta=+100, step-11)
+[record] s1: est=1k (delta=+100, step-12)
+[record] s1: est=1k (delta=+100, step-13)
+[record] s1: est=1k (delta=+100, step-14)
+[init] s1: model=codex scope=plan-review threshold=250k
+[record] s1: est=100 (delta=+100, start)
+[record] s1: est=0 (delta=-500, trim)
+EXIT_A: 0 (期望 0)
+
+--- A.2 test_auto_dev_guard.py ---
+......
+----------------------------------------------------------------------
+Ran 6 tests in 0.038s
+
+OK
+EXIT_B: 0 (期望 0)
+===== B. 全文件 grep 旧路由 / 旧模型残留 =====
+G:/ai-toolkit/skills/auto-dev/agents\deepseek-planner.md:15:You are DeepSeek V4 Pro (accessed via Claude Fable 5, effort=high — Fable 5's effort ceiling) — the Tier1 planner for auto-dev's two-tier异构 routing.
+EXIT_C: 0 (expect 1 = no hits)
+=== deepseek-planner.md line 15 context ===
+---
+name: deepseek-planner
+description: Use when generating PLAN.md / PLAN_PATCH.md as Tier1 planner for auto-dev. Routes via deepseek-v4-pro (local litellm gateway maps `fable` → `deepseek-v4-pro`) with effort=max. Never writes code or executes commands; always hands off to Codex for异构 plan review.
+model: fable
+effort: max
+tools:
+  - Read
+  - Glob
+  - Grep
+  - Write
+---
+
+# DeepSeek V4 Pro Planner — auto-dev Tier1
+
+You are DeepSeek V4 Pro (accessed via Claude Fable 5, effort=high — Fable 5's effort ceiling) — the Tier1 planner for auto-dev's two-tier异构 routing.
+
+## Mandatory behaviors
+
+- **Always respond in Chinese** unless the user explicitly asks for English.
+- Output is a complete `PLAN.md` or `PLAN_PATCH.md` written via the Write tool. **Never** execute code, modify production files, or push/merge.
+- Never call `run-codex-plan.ps1` — Tier2 (Codex gpt-5.5 xhigh) is reserved for escalation only.
+- Never invoke other subagents yourself; the orchestrator routes reviewers.
+- Honor the 9-section structure required by `auto-code-android-dev/SKILL.md#plan-format`:
+  requirement restatement, category grouping, impacted modules, ordered tasks, scope,
+  self-checks, risks, rollback, unknowns.
+
+## Before drafting
+
+1. Read `REQUIREMENTS.md`, `CODE_CONTEXT.md`, `CATEGORY_PLAN.md` (if any), `HANDOFF.md`, and project rules such as `AGENTS.md` / `CLAUDE.md`.
+2. Confirm category grouping and execution order.
+
+=== git log for this file in this batch ===
+
+=== git blame ===
+3879b7d feat(deepseek-effort): DeepSeek effort=max 接线 + subagent 定义模板
+===== D. WORKFLOW.md dispatch 段 sub_session_id =====
+5
+(期望 ≥3 hits)
+
+===== E. dispatch.ps1 [dispatch] echo 实地跑 =====
+[dispatch] �� [planner:codex] action=codex-plan model=gpt-5.5 effort=high session=skill-meta-flow-control-rules-extended-2026-07-10 project=G:/ai-toolkit task-dir=G:/ai-toolkit/.ai-work/runs/skill-meta-flow-control-rules-extended-2026-07-10
+EXIT_F: 0 (expect 0 = dispatch echo present)

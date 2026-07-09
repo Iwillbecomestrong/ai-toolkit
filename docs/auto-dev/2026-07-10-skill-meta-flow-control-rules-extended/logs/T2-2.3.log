@@ -1,0 +1,46 @@
+=== T2-2.3: Q-7 USER_NEEDS_DIGEST.md 协议 ===
+649:### 0.11.2 用户话 digest (USER_NEEDS_DIGEST.md 协议)
+651:主编排收到 user message 后,写/append `USER_NEEDS_DIGEST.md` 与 `PLAN.md` 同目录 (`docs/<skill>/<date-task>/USER_NEEDS_DIGEST.md`)。该文件同时含:
+654:2. **digest**(主编排整理后的清晰需求,按主题分组,标 priority)
+657:**sub-agent 用法**:先读 `USER_NEEDS_DIGEST.md` raw + digest,再写 PLAN。Plan risks 段应该包含 "未澄清项"。
+661:docs/auto-dev/2026-07-09-skill-meta-tdd-flow/USER_NEEDS_DIGEST.md
+667:- 同样适用于 case B 时代问(把用户的回复同时 append 到 USER_NEEDS_DIGEST.md)
+669:**Q-7 USER_NEEDS_DIGEST.md 协议强化**(3 要素缺一不可):
+670:- **raw** — 用户原话逐字摘录(保留语气/情绪/隐含语义,不要改写)
+671:- **digest** — 主编排整理后的清晰需求,按主题分组(B-1/B-2/... + priority 标)
+673:- sub-agent 使用顺序:**先读 raw → 再读 digest → 留意 unknowns → 写 PLAN**。
+674:- 文件位置固定 `docs/<skill>/<YYYY-MM-DD-task-id>/USER_NEEDS_DIGEST.md`,与 `PLAN.md` 同目录。
+675:- 模板见 `docs/auto-dev/2026-07-09-skill-meta-tdd-flow/USER_NEEDS_DIGEST.md`(已实现,可参考)。
+
+--- §0.11.2 协议段 ---
+
+主编排收到 user message 后,写/append `USER_NEEDS_DIGEST.md` 与 `PLAN.md` 同目录 (`docs/<skill>/<date-task>/USER_NEEDS_DIGEST.md`)。该文件同时含:
+
+1. **raw**(用户口述原话逐字摘录,保留情绪 + 语气 + 隐含语义)
+2. **digest**(主编排整理后的清晰需求,按主题分组,标 priority)
+3. **已知未澄清** (sub-agent 写 PLAN 时应留意)
+
+**sub-agent 用法**:先读 `USER_NEEDS_DIGEST.md` raw + digest,再写 PLAN。Plan risks 段应该包含 "未澄清项"。
+
+**示例路径**:
+```
+docs/auto-dev/2026-07-09-skill-meta-tdd-flow/USER_NEEDS_DIGEST.md
+```
+
+**目的**:
+- 让 sub-agent 在写 PLAN 之前先看 user_raw + user_digest 两类信息,避免误解
+- 也是 §0.11 "主编排早期提醒 + 整理用户话" 的实施痕迹
+- 同样适用于 case B 时代问(把用户的回复同时 append 到 USER_NEEDS_DIGEST.md)
+
+**Q-7 USER_NEEDS_DIGEST.md 协议强化**(3 要素缺一不可):
+- **raw** — 用户原话逐字摘录(保留语气/情绪/隐含语义,不要改写)
+- **digest** — 主编排整理后的清晰需求,按主题分组(B-1/B-2/... + priority 标)
+- **unknowns** — 已知未澄清项,sub-agent 写 PLAN 时 risks 段必须覆盖
+- sub-agent 使用顺序:**先读 raw → 再读 digest → 留意 unknowns → 写 PLAN**。
+- 文件位置固定 `docs/<skill>/<YYYY-MM-DD-task-id>/USER_NEEDS_DIGEST.md`,与 `PLAN.md` 同目录。
+- 模板见 `docs/auto-dev/2026-07-09-skill-meta-tdd-flow/USER_NEEDS_DIGEST.md`(已实现,可参考)。
+
+### 0.11.3 UserPromptSubmit hook 自动判定(系统层)
+
+UserPromptSubmit hook(在 auto_dev_guard.py 注册)在 user message 进来时跑,自动:
+1. grep `AMBIGUITY_RAISED` 在最近 N 条 sub-agent report 里

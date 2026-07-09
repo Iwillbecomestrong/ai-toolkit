@@ -1,0 +1,16 @@
+=== T2-5.2: forbidden scope 严守 ===
+75:- `install-all.ps1`
+76:- `manifest.json`
+77:- nested-submodule-restructure 相关脏文件
+116:- `rg -n "install-all.ps1|manifest.json|nested-submodule" docs\auto-dev\2026-07-10-skill-meta-flow-control-rules-extended\PLAN.md`
+169:- 不修改 `install-all.ps1` / `manifest.json`。
+170:- 不处理 nested-submodule-restructure 脏文件。
+EXIT: 0
+
+--- 全 hit in PLAN.md 上下文 ---
+75:- `install-all.ps1`
+76:- `manifest.json`
+77:- nested-submodule-restructure 相关脏文件
+116:- `rg -n "install-all.ps1|manifest.json|nested-submodule" docs\auto-dev\2026-07-10-skill-meta-flow-control-rules-extended\PLAN.md`
+169:- 不修改 `install-all.ps1` / `manifest.json`。
+170:- 不处理 nested-submodule-restructure 脏文件。

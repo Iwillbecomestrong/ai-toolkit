@@ -1,0 +1,9 @@
+=== T2-3.2: Q-9 疏漏接受 + 主 session 不阻塞 ===
+97:│   ⑤ 主编排疏漏可被用户插话纠正 (Q-9 疏漏接受):                        │
+301:## 0.8 后台 sub-agent 不阻塞主 session — 用户问时主动回报
+305:│ sub-agent background 规范 (主 session 不阻塞):                       │
+307:│ ① 派 sub-agent 必须用 run_in_background:true,让 sub-agent 异步跑。│
+352:- Agent tool / Bash tool 调用 sub-agent 时,**主 session 必须用 `run_in_background:true` + `description`** 让 harness 知道这是 background。
+385:│      但 主 session 不阻塞 (§0.8) — 用户问时报告                     │
+434:- 用户不盯屏,主编排必须代为"看着"。 sub-agent 在 background 跑时,主 session 既不阻塞,又要守住流水线方向。
+742:- 后台 sub-agent 跑中,主 session 仍 receptive:用户可发新消息/查询进度/打新指令,§0.8 ⑤ 强制不阻塞主 turn。

@@ -1,0 +1,81 @@
+=== T2-0.5: Q-13c token_usage 报告 ===
+--- §0.10.8 token_usage 报告规则 ---
+181:| 如何让多 dispatch "看到彼此的工作"? | 通过**文件交接**,不靠 chat:<br>1. `AGENT_REGISTRY.json` 持久化 `sessions[session_id]`<br>2. `.ai/tasks/<TASK-ID>/PLAN.md` / `HANDOFF.md` / `IMPLEMENTATION_REPORT.md` / `TEST_REPORT.md` / `CODE_REVIEW.md` 由各责任身份 commit 落盘<br>3. sub-agent 启动时,orchestrator 把这些文件路径塞进它的 prompt,作为"任务交接包"<br>4. `show_session_context.py print <sid>` 在每次 dispatch 前打印 该 sid 累计估算 token + 余量 |
+324:│    看 active sub-agents 的:status / last activity / tokens,         │
+593:### §0.10.8 批后 token 报告 (Q-13c)
+597:│ 批后 token 报告规则:                                                   │
+599:│ ① 每批需求完成 → IMPLEMENTATION_REPORT.md 末尾 §END_TOKEN_USAGE_REPORT│
+600:│    段,列所有 sub-agent session token_usage 明细:                       │
+608:│    以及 dispatch 时 record 入口记录的 token_usage。                    │
+618:**目的**:用户原话 "在一批需求完成之后,要汇报一下子代理会话的一个 token 占用情况" → 主编排 / 用户验收可一眼看出哪个 sub-agent 耗多少 token / 多少 tool_uses / 跑多久,便于后续优化 model/effort 分配。
+
+--- templates ---
+=== T2-0.5: templates check ===
+AGENT_REGISTRY.json
+AGENT_RETURN_TEMPLATE.md
+CONTEXT_PACKET.md.template
+CONTEXT_RUN_DECISION.md.template
+CURRENT_DECISIONS.md.template
+INTEGRATION_STATE.json
+ISSUES.json
+ISSUE_REGISTRY.json
+ISSUE_TEMPLATE.md
+LOG_SLICE.md.template
+MODEL_QUOTA_CHECK.md.template
+NEXT_ACTIONS.md.template
+NEXT_AGENT_PROMPT_TEMPLATE.md
+OPEN_ISSUES.md.template
+ORCHESTRATOR_STATE.json
+PIPELINE_REGISTRY.md.template
+PLAN.md.template
+PLAN_AGENT_SELECTION.md
+PLAN_PATCH.input.md.template
+STATE.json
+TEST_REPORT.summary.md.template
+USER_FEEDBACK.md.template
+manifest.json
+---
+EXIT: 1
+
+--- IMPL_REPORT templates ---
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/IMPLEMENTATION_REPORT.md:229:| Q-13c (token_usage 报告) | T2-0.5 | §0.10.8 + 本报告末尾 §END_TOKEN_USAGE_REPORT | ✓ |
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/USER_NEEDS_DIGEST.md:85:- 本批按"**单轮 DeepSeek sub-agent 输入 context < 500k token**"实现；如果实际 DeepSeek 端报 token_usage > 500k → 主编排判定是否拆新 pipeline。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/USER_NEEDS_DIGEST.md:134:- **§0.10.8 token budget 报告**：IMPLEMENTATION_REPORT.md 末尾 + ACCEPTANCE 时 → 列 sub-agent session token_usage 明细（哪一段占多少），user 验收可看。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:49:| **T2-0.5** | AC-13c | 静态 grep | `token_usage` 报告规则在 §0.10.8 + IMPLEMENTATION_REPORT 模板 | **P0** |
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:89:| AC-13c.1/13c.2 | Q-13c token_usage 报告 (IMPLEMENTATION_REPORT 末尾 + ACCEPTANCE) | T2-0.5 | P0 |
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:204:### T2-0.5 — Q-13c token_usage 报告
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:210:rg -n "token_usage|token 报告|token_usage.*明细|sub-agent.*token|批后.*token|批后 token 报告" \
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:213:rg -n "token_usage|token_usage.*明细" \
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:218:- §0.10.8 (新) 有 `token_usage` 报告规则:每批完成后 IMPLEMENTATION_REPORT.md 末尾 + ACCEPTANCE 时列 sub-agent session token_usage 明细 (含 reviewer 65640 tokens / 15 tool_uses / 292s 这类格式)
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:219:- 模板或 IMPLEMENTATION_REPORT 末尾示例段含 token_usage 字段 (developer 写报告时填实际值)
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:222:- §0.10.8 缺失 token_usage 报告要求 → FAIL
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:223:- 模板未列 token_usage 字段 → FAIL (Q-13c 落地兜底)
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN_REVIEW.md:188:- Q-13c: IMPLEMENTATION_REPORT.md 末尾 + ACCEPTANCE 时列 token_usage 明细（含 reviewer 65640 tokens / 15 tool_uses / 292s）
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:31:16. Q-13c：每批完成后，`IMPLEMENTATION_REPORT.md` 末尾和 ACCEPTANCE 报告必须列 sub-agent session token_usage 明细。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:94:10. 更新实施报告模板要求：确保后续 developer 在 `IMPLEMENTATION_REPORT.md` 末尾加入 token_usage 明细。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:115:- `rg -n "sub_session_id|SessionId|500k|token_usage|DEFERRED_due_to_codex_unavailable" skills\_shared skills\auto-dev`
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:155:- LOW：token_usage 明细依赖各 runner/报告实际可观测字段，部分条目可能只能估算。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/plan.meta.json:100:    "R6[LOW]: Q-13c token 报告依赖 show_session_context.py — 若 litellm 不返回 token_usage 则报告为空",
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:1:=== T2-0.5: Q-13c token_usage 报告 ===
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:2:--- §0.10.8 token_usage 报告规则 ---
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:8:600:│    段,列所有 sub-agent session token_usage 明细:                       │
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:9:608:│    以及 dispatch 时 record 入口记录的 token_usage。                    │
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:41:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/IMPLEMENTATION_REPORT.md:229:| Q-13c (token_usage 报告) | T2-0.5 | §0.10.8 + 本报告末尾 §END_TOKEN_USAGE_REPORT | ✓ |
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:42:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/USER_NEEDS_DIGEST.md:85:- 本批按"**单轮 DeepSeek sub-agent 输入 context < 500k token**"实现；如果实际 DeepSeek 端报 token_usage > 500k → 主编排判定是否拆新 pipeline。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:43:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/USER_NEEDS_DIGEST.md:134:- **§0.10.8 token budget 报告**：IMPLEMENTATION_REPORT.md 末尾 + ACCEPTANCE 时 → 列 sub-agent session token_usage 明细（哪一段占多少），user 验收可看。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:44:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:49:| **T2-0.5** | AC-13c | 静态 grep | `token_usage` 报告规则在 §0.10.8 + IMPLEMENTATION_REPORT 模板 | **P0** |
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:45:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:89:| AC-13c.1/13c.2 | Q-13c token_usage 报告 (IMPLEMENTATION_REPORT 末尾 + ACCEPTANCE) | T2-0.5 | P0 |
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:46:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:204:### T2-0.5 — Q-13c token_usage 报告
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:47:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:210:rg -n "token_usage|token 报告|token_usage.*明细|sub-agent.*token|批后.*token|批后 token 报告" \
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:48:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:213:rg -n "token_usage|token_usage.*明细" \
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:49:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:218:- §0.10.8 (新) 有 `token_usage` 报告规则:每批完成后 IMPLEMENTATION_REPORT.md 末尾 + ACCEPTANCE 时列 sub-agent session token_usage 明细 (含 reviewer 65640 tokens / 15 tool_uses / 292s 这类格式)
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:50:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:219:- 模板或 IMPLEMENTATION_REPORT 末尾示例段含 token_usage 字段 (developer 写报告时填实际值)
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:51:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:222:- §0.10.8 缺失 token_usage 报告要求 → FAIL
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:52:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/TEST_TARGET.md:223:- 模板未列 token_usage 字段 → FAIL (Q-13c 落地兜底)
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:53:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN_REVIEW.md:188:- Q-13c: IMPLEMENTATION_REPORT.md 末尾 + ACCEPTANCE 时列 token_usage 明细（含 reviewer 65640 tokens / 15 tool_uses / 292s）
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:54:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:31:16. Q-13c：每批完成后，`IMPLEMENTATION_REPORT.md` 末尾和 ACCEPTANCE 报告必须列 sub-agent session token_usage 明细。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:55:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:94:10. 更新实施报告模板要求：确保后续 developer 在 `IMPLEMENTATION_REPORT.md` 末尾加入 token_usage 明细。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:56:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:115:- `rg -n "sub_session_id|SessionId|500k|token_usage|DEFERRED_due_to_codex_unavailable" skills\_shared skills\auto-dev`
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:57:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/PLAN.md:155:- LOW：token_usage 明细依赖各 runner/报告实际可观测字段，部分条目可能只能估算。
+G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/logs\T2-0.5.log:58:G:/ai-toolkit/docs/auto-dev/2026-07-10-skill-meta-flow-control-rules-extended/plan.meta.json:100:    "R6[LOW]: Q-13c token 报告依赖 show_session_context.py — 若 litellm 不返回 token_usage 则报告为空",
+EXIT: 0

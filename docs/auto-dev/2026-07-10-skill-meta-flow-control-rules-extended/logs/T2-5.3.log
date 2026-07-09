@@ -1,0 +1,30 @@
+=== T2-5.3: dispatch è¡Œä¸º ===
+[31;1mdispatch.ps1: [31;1mA parameter cannot be found that matches parameter name 'Prompt'.[0m
+=== T2-5.3: dispatch è¡Œä¸º (ä¿®æ­£ç‰ˆ) ===
+[dispatch] ÅÉ [planner:codex] action=codex-plan model=gpt-5.5 effort=high session=skill-meta-flow-control-rules-extended-2026-07-10 project=G:/ai-toolkit task-dir=G:/ai-toolkit/.ai-work/runs/skill-meta-flow-control-rules-extended-2026-07-10
+Missing G:\ai-toolkit\.ai-work\runs\skill-meta-flow-control-rules-extended-2026-07-10\REQUIREMENTS.md
+ËùÔÚÎ»ÖÃ G:\ai-toolkit\skills\auto-code-android-dev\scripts\run-codex-plan.ps1:26 ×Ö·û: 39
++ if (-not (Test-Path $requirements)) { throw "Missing $requirements" }
++                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Missing G:\ai-t...REQUIREMENTS.md:String) [], RuntimeException
+    + FullyQualifiedErrorId : Missing G:\ai-toolkit\.ai-work\runs\skill-meta-flow-control-rules-extended-2026-07-10\RE 
+   QUIREMENTS.md
+ 
+--- expected [dispatch] grep ---
+EXIT: 1 (æœŸæœ› 0 = found)
+--- raw log ---
+[dispatch] ÅÉ [planner:codex] action=codex-plan model=gpt-5.5 effort=high session=skill-meta-flow-control-rules-extended-2026-07-10 project=G:/ai-toolkit task-dir=G:/ai-toolkit/.ai-work/runs/skill-meta-flow-control-rules-extended-2026-07-10
+Missing G:\ai-toolkit\.ai-work\runs\skill-meta-flow-control-rules-extended-2026-07-10\REQUIREMENTS.md
+ËùÔÚÎ»ÖÃ G:\ai-toolkit\skills\auto-code-android-dev\scripts\run-codex-plan.ps1:26 ×Ö·û: 39
++ if (-not (Test-Path $requirements)) { throw "Missing $requirements" }
++                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : OperationStopped: (Missing G:\ai-t...REQUIREMENTS.md:String) [], RuntimeException
+    + FullyQualifiedErrorId : Missing G:\ai-toolkit\.ai-work\runs\skill-meta-flow-control-rules-extended-2026-07-10\RE 
+   QUIREMENTS.md
+ 
+
+--- expect exact match: prompt Chinese 'æ´¾' is often mojibake on Windows console ---
+[dispatch] ÅÉ [planner:codex] action=codex-plan model=gpt-5.5 effort=high session=skill-meta-flow-control-rules-extended-2026-07-10 project=G:/ai-toolkit task-dir=G:/ai-toolkit/.ai-work/runs/skill-meta-flow-control-rules-extended-2026-07-10
+
+--- session= field check ---
+[dispatch] ÅÉ [planner:codex] action=codex-plan model=gpt-5.5 effort=high session=skill-meta-flow-control-rules-extended-2026-07-10 project=G:/ai-toolkit task-dir=G:/ai-toolkit/.ai-work/runs/skill-meta-flow-control-rules-extended-2026-07-10

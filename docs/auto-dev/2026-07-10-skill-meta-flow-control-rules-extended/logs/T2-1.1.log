@@ -1,0 +1,31 @@
+=== T2-1.1: Q-1 DEFERRED + tester first 7 步路径 ===
+121:│   ③ Codex 无额度时(Q-1 fallback):写 DEFERRED_CODEX_REVIEW.md,        │
+122:│      reviewer_status=deferred_due_to_codex_unavailable,跳 PLAN_REVIEW │
+123:│      阶段直接 tester first (见 §0.7.2)。严禁降级 deepseek 替 Codex 审  │
+139:│         应走 DEFERRED + tester first (§0.7.2);                       │
+146:│      L1 Codex 卡死 (Q-1 fallback):写 DEFERRED_CODEX_REVIEW.md +       │
+147:│        reviewer_status=deferred_due_to_codex_unavailable,跳 PLAN_REVIEW│
+148:│        阶段直接 tester first;DeepSeek 单独出 + 审 plan (异构底线     │
+171:| L1 Codex 卡 | DeepSeek V4 Pro (max) [Q-1 fallback 单独承担] | **DEFERRED + skip → tester first** | deepseek-reviewer 可(异构宽松) | warning |
+220:5. **Codex 无额度时 (Q-1 fallback)**:`DEFERRED_CODEX_REVIEW.md` + `reviewer_status=deferred_due_to_codex_unavailable`,**严禁** 假装降级到 deepseek-reviewer 审 deepseek-planner (丧失异构底线)。正确路径见 §0.7.2 7 步路径(DEFERRED → tester first → developer → tester → reviewer [code review 异构底线宽松] → ACCEPTANCE)。
+231:| `DEFERRED_due_to_codex_unavailable` | Codex 卡死 / 无额度,已写 `DEFERRED_CODEX_REVIEW.md` | 跳过 PLAN_REVIEW 阶段,直接派 `[tester:minimax]` 写 TEST_TARGET.md (TDD 头) → developer → tester → reviewer (异构底线对 code review 工位宽松,codex / deepseek-reviewer 都可以) → ACCEPTANCE |
+244:1. 写 DEFERRED_CODEX_REVIEW.md (template: _shared/scripts/templates/DEFERRED_CODEX_REVIEW.md.template)
+245:   reviewer_status = deferred_due_to_codex_unavailable
+267:| 首次 PLAN + Codex 卡死/无额度 (L1) | `[planner:deepseekV4pro]` (deepseek-planner, fable, max) [Q-1 fallback 单独承担] | **DEFERRED + skip + tester first** (§0.7.2) |
+269:| 返工 PLAN_PATCH + Codex 卡死 | `[planner:deepseekV4pro]` (沿用 L1 fallback) | **DEFERRED + skip + tester first** (§0.7.2) |
+287:| **PLAN_REVIEW** (审 PLAN.md) | 异构责任:出 plan 方 ≠ 审 plan 方 | `[reviewer:deepseek]` (fable max) ← Q-13 swap | 卡死 → DEFERRED + tester first (§0.7.2),**严禁** 降级 deepseek-reviewer 替 Codex(同族) |
+290:**异构性自纠错**:主编排如发现 CODE_REVIEW 工位已被错误派成 deepseek-reviewer 审 deepseek-planner 的 plan (丧失异构性),**必须回滚**,重新派真异构 reviewer (Codex) 或按 DEFERRED + skip 路径走。code review 工位异构底线**宽于** plan review 工位,所以同族 review 在 CODE_REVIEW 阶段可接受,但 PLAN_REVIEW 阶段绝不可。
+295:- "跳过 PLAN_REVIEW"——Gate 1 拦
+844:| `plan_review_or_defer` | PLAN 生成后、进入开发前 | reviewer 唯一为 Codex CLI：首次计划审查用内部 gpt-5.5，用户反馈/返工升级审查用内部 gpt-5.5。无额度时必须有 `DEFERRED_CODEX_REVIEW.md` 且 `plan_review_status = deferred_due_to_codex_quota`。 |
+
+--- 7 步路径序列 ---
+93:│   ④ tester 必派,不可由主编排自己 ad-hoc 跑 build/test 代替             │
+185:- 让主编排"代替" tester 跑 build/test 抢走责任——tester 必派,且其 structured report 才能判定 PASS。
+244:1. 写 DEFERRED_CODEX_REVIEW.md (template: _shared/scripts/templates/DEFERRED_CODEX_REVIEW.md.template)
+247:2. **不解锁 developer**,不"重试 Codex",不"降级 deepseek 替 Codex"
+249:3. 直接派 [tester:minimax] (effort=medium) 写 TEST_TARGET.md (TDD 头)
+250:   - tester 必派,不省
+253:4. developer 实现 + atomic commit
+255:5. tester 跑测试 (T1-T12)
+257:6. reviewer 审 diff (deepseek-reviewer Tier1 / Codex Tier2 都可,异构底线对 code review 阶段宽松)
+259:7. ACCEPTANCE

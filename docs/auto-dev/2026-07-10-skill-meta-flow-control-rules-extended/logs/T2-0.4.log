@@ -1,0 +1,6 @@
+=== T2-0.4: Q-13b 500k token threshold ===
+270:| DeepSeek 单轮 input < 500k token (Q-13b) | 允许再来一轮返工(同 plan 上下文内继续) | 同上 |
+271:| DeepSeek 单轮 input ≥ 500k token (Q-13b) | **主编排判定拆新 pipeline**(避免 context 爆炸,不开新 PLAN_PATCH) | — |
+949:- **DeepSeek**：同产线复用同一会话；寿命 ≤500k；超 500k 或神志不清立即换。
+979:6. 达到每模型会话寿命（Codex 250k / DeepSeek 500k），或该会话神志不清；MiniMax developer/tester 每完成一个任务必换（见"每模型会话复用寿命"）。
+1185:- 以上为通用档位；各模型的实际会话寿命以 `MODEL_ROUTING.md#上下文阈值（会话复用寿命）` 为准（Codex 250k / DeepSeek 500k / MiniMax 每任务必换），冲突时以后者为准。

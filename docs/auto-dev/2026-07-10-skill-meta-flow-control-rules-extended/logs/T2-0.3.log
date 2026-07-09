@@ -1,0 +1,16 @@
+=== T2-0.3: Q-13a sub_session_id 复用规则 ===
+--- §0.10.7 sub_session_id 规则 ---
+558:### §0.10.7 session 复用 (sub_session_id, Q-13a)
+562:│ sub_session_id 复用规则(同一 pipeline 内全员共用):                      │
+566:│    同一个 sub_session_id = <pipeline_id>。                            │
+579:│ ⑤ 落地执行:WORKFLOW.md dispatch 段加 sub_session_id / SessionId       │
+
+--- WORKFLOW.md dispatch 段 sub_session_id ---
+162:### 1.5 dispatch sub_session_id 协议 (Q-13a 落地)
+166:│ 每次 dispatch sub-agent 时必须回填 sub_session_id = <pipeline_id>:      │
+169:│    -SessionId <pipeline_id> 参数已实现 (line 43 / 98-99 / 105)        │
+171:│    session=<pipeline_id> project=<P> task-dir=<T>`                    │
+174:│    透传 sub_session_id via dispatch prompt 的 first line:              │
+175:│    "[dispatch] sub_session_id=<pipeline_id> role=<R> model=fable"    │
+179:│    同 DeepSeek 端,first line 加 "[dispatch] sub_session_id=<sid>"。 │
+181:│ ④ orchestrator 视角:同 pipeline 内所有 sub-agent 字面共享 <pipeline_id>│

@@ -1,0 +1,34 @@
+=== T2-1.3: Q-3 PLAN_REVIEW 三态枚举保持 ===
+
+--- 三态表完整内容 ---
+任何其它状态都视为异常路径,需主编排立即 echo 追问:
+
+| 结局 | 含义 | 下一动作 |
+|---|---|---|
+| `APPROVE` | 异构 reviewer 通过 PLAN | 进入 TEST_TARGET (派 `[tester:minimax]`) |
+| `REQUEST_CHANGES` | reviewer 指出 PLAN 缺口 | 回 planner 改 → 出 `PLAN_PATCH.md` → 再走一遍 §0.7 (返工 effort 升级,见 §0.7.2) |
+| `DEFERRED_due_to_codex_unavailable` | Codex 卡死 / 无额度,已写 `DEFERRED_CODEX_REVIEW.md` | 跳过 PLAN_REVIEW 阶段,直接派 `[tester:minimax]` 写 TEST_TARGET.md (TDD 头) → developer → tester → reviewer (异构底线对 code review 工位宽松,codex / deepseek-reviewer 都可以) → ACCEPTANCE |
+
+**异常路径的判定**(主编排当下 turn 必须做):
+- 收到 reviewer report,先 grep `STATUS:` 字段是不是三态之一
+- 不是三态 / 字段缺失 / 文件不存在 / `decision` 字段语义模糊 → 立即 echo 追问, **不派任何 sub-agent**
+
+### 0.7.2 Codex 卡死 / DEFERRED 处理(降级底线 = 跳阶段,不降级 reviewer)
+
+Codex CLI 卡死 (exit -1,启动崩溃) 或 无额度 时,**严禁** 降级到 deepseek-reviewer 假装异构(那是同一族模型失去异构底线)。正确路径:
+
+```
+Codex 卡死 / 无额度
+  ↓
+1. 写 DEFERRED_CODEX_REVIEW.md (template: _shared/scripts/templates/DEFERRED_CODEX_REVIEW.md.template)
+   reviewer_status = deferred_due_to_codex_unavailable
+=== T2-1.3 三态 grep (no filter) ===
+113:│      哪怕用户在催,也必须先派 reviewer 拿到 APPROVE 才能宣告完成。     │
+128:│      然后同一 reviewer 复审,反复到 APPROVE 才进 ACCEPTANCE。         │
+199:| REVIEW | `[reviewer:codex]` (Codex gpt-5.5 high) 或 `[reviewer:deepseek]` fallback | ACCEPTANCE 必须等 REVIEW 返回 APPROVE |
+218:3. **若 reviewer `REQUEST_CHANGES`**:回传 planner 改 → 再 2(返工周期 Codex `-Effort xhigh` 提档 effort,模型仍 gpt-5.5)
+219:4. **若 reviewer `APPROVE`**:进入 TEST_TARGET(派 `[tester:minimax]` 写失败测试靶)→ IMPLEMENT(派 `[developer:minimax]`)→ TEST(...)→ REVIEW(派 `[reviewer:codex]` 审 diff)...→ ACCEPTANCE
+229:| `APPROVE` | 异构 reviewer 通过 PLAN | 进入 TEST_TARGET (派 `[tester:minimax]`) |
+230:| `REQUEST_CHANGES` | reviewer 指出 PLAN 缺口 | 回 planner 改 → 出 `PLAN_PATCH.md` → 再走一遍 §0.7 (返工 effort 升级,见 §0.7.2) |
+231:| `DEFERRED_due_to_codex_unavailable` | Codex 卡死 / 无额度,已写 `DEFERRED_CODEX_REVIEW.md` | 跳过 PLAN_REVIEW 阶段,直接派 `[tester:minimax]` 写 TEST_TARGET.md (TDD 头) → developer → tester → reviewer (异构底线对 code review 工位宽松,codex / deepseek-reviewer 都可以) → ACCEPTANCE |
+318:│        PLAN_REVIEW.md 或 REQUEST_CHANGES → §0.7 决定改 vs 进入       │

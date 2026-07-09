@@ -1,0 +1,19 @@
+=== T2-4.1: Q-11 长而清命名规则 + 跨文件引用 ===
+--- 1. SKILL_CORE §0.11.5 命名规则段 ---
+698:### 0.11.5 命名规则段 (Q-11 — 长而清,禁缩写)
+702:│ 命名规则 — 全词或中文,禁缩写:                                          │
+733:**目的**:让任何 reviewer / 主编排 / 用户看一眼名字就知道该 pipeline 改什么、派给谁、走什么 stage。禁缩写是为了避免歧义(`sm-fce-2610710` 看不出是 skill-meta-flow-control-rules-extended 还是别的)。
+
+--- 2. auto-dev/SKILL.md 入口摘要引用 ---
+33:- 理解真实需求、分类到固定 pipeline / category。
+133:## 7. 命名规则引用 (Q-11)
+135:完整命名规则见 `../_shared/SKILL_CORE.md#0115-命名规则段-q11--长而清禁缩写`,本入口只保留摘要:
+140:| `category` | `<模块名>:<子功能>:<修改类型>` | `skill-core:q13:swap` | `sc-13` |
+145:**约束**:全词或中文、禁缩写、看名字能知道派给谁和改什么。老 pipeline 已 commit 不回改(详见 SKILL_CORE §0.11.5 ⑦ caveat)。
+
+--- 3. WORKFLOW.md CATEGORY_DISCOVERY 引用 ---
+32:- `category_id` 命名格式:`<模块名>:<子功能>:<修改类型>` 全词,禁缩写
+38:- 老 pipeline 已 commit 不回改(Q-11 caveat),新 category 强制按上述格式
+138:git diff > .ai-work/runs/<task>/<category>/diff.patch
+228:- `{STATE_DIR}/runs/<task-id>/<category-id>/manifest.json`
+350:  -> category/FOLLOWUP-<n>.md

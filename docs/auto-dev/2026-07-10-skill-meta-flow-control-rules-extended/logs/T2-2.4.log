@@ -1,0 +1,38 @@
+=== T2-2.4: Q-12 file overlap 集合论 O(N) ===
+398:│    - 耦合度高 (共享文件 / 共享 state / 共享接口) → CHAIN_AFTER 串行   │
+399:│    - 耦合度低 (无共享文件 + 无共享 state + 无依赖) → PARALLEL_NEW_   │
+404:│    - 决策依据:Q-12 file overlap 聚类 + Q-9 主编排当下判定             │
+461:- 触发条件: 新需求**不是** blocker,但**与当前 step 不可并行**(共享文件/状态)
+498:**Q-12 file overlap 集合论 O(N) 聚类算法**(判定 UNRELATED 时的核心):
+501:  1. 对所有 req 两两比对 `files_modify` 集合是否有交集(共享文件)。
+502:  2. 共享文件 ≥ 1 个 → 同类 / 必须串行依赖(CHAIN_AFTER 或同一 pipeline 内串行)。
+503:  3. 无共享文件 + 依赖方向无环 + 无共享 state → 可并行 (PARALLEL_NEW_PIPELINE)。
+504:  4. 无共享文件 + 但有共享 state (e.g. 共享 DB schema / 共享全局锁 / 共享后台服务) → 串行。
+506:- **同 pipeline 内默认串行**:哪怕 file overlap = 0,只要 user 显式说"先做 A 再做 B",仍按串行。
+507:- **聚类结果**:同一类 = 共享文件 / 共享 state / 显式串行声明;跨类 = 完全独立(可并行)。
+509:**与 Q-8 关系**:Q-8 流水线并行/串行柔性化 + Q-12 file overlap 聚类 = 同一判定矩阵的两个轴 — file overlap 给"是否同类",Q-8 给"同类串行/异类并行"。
+
+--- file overlap 聚类算法段 ---
+**Q-12 file overlap 集合论 O(N) 聚类算法**(判定 UNRELATED 时的核心):
+- 输入:若干需求 {req_1, req_2, ..., req_N},每个 req 标出 `files_modify` 集合。
+- 步骤:
+  1. 对所有 req 两两比对 `files_modify` 集合是否有交集(共享文件)。
+  2. 共享文件 ≥ 1 个 → 同类 / 必须串行依赖(CHAIN_AFTER 或同一 pipeline 内串行)。
+  3. 无共享文件 + 依赖方向无环 + 无共享 state → 可并行 (PARALLEL_NEW_PIPELINE)。
+  4. 无共享文件 + 但有共享 state (e.g. 共享 DB schema / 共享全局锁 / 共享后台服务) → 串行。
+- 时间复杂度 O(N²) 朴素实现;N ≤ 13 时实际 < 100 次集合比较,可接受;若 N 极大用 union-find 优化到 O(N·α(N))。
+- **同 pipeline 内默认串行**:哪怕 file overlap = 0,只要 user 显式说"先做 A 再做 B",仍按串行。
+- **聚类结果**:同一类 = 共享文件 / 共享 state / 显式串行声明;跨类 = 完全独立(可并行)。
+
+**与 Q-8 关系**:Q-8 流水线并行/串行柔性化 + Q-12 file overlap 聚类 = 同一判定矩阵的两个轴 — file overlap 给"是否同类",Q-8 给"同类串行/异类并行"。
+
+### ② ABORT_TO_PLAN (强制回到 PLAN)
+- 触发条件: 当前 pipeline 在 DEVELOP/TEST 阶段踩到 plan 缺口/需求变化,需要 plan 增量才走得通
+- 主编排动作:
+  - 用 **SendMessage tool** 给正在跑的 background sub-agent 发一条:
+    ```
+    [orchestrator] stop, 回 planner 拿新 PLAN_PATCH
+    原因: <why-abort>
+    当前状态 echo 后等待被回 plan
+    ```
+  - sub-agent 看到这条会停下来,写 HANDOFF.md, 然后**新** planner 接力

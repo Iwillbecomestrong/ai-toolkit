@@ -1,0 +1,14 @@
+=== T2-0.2: Q-13 fallback chain L0/L1/L2 ===
+Verify §0.6.2 ⑥ has L0/L1/L2 enumeration
+
+124:│      PLAN(丧失异构底线)。详 §0.6.2 ⑥ fallback chain。                │
+143:│   ⑥ fallback chain (Q-13 改版 + Q-1 fallback):                        │
+144:│      L0 理想 Tier1:Codex gpt-5.5 (high) 出 PLAN → DeepSeek V4 Pro     │
+146:│      L1 Codex 卡死 (Q-1 fallback):写 DEFERRED_CODEX_REVIEW.md +       │
+166:**fallback chain 实施节点**:
+170:| L0 理想 | Codex gpt-5.5 (high) | DeepSeek V4 Pro (max) | Codex gpt-5.5 (high) | 正常 |
+171:| L1 Codex 卡 | DeepSeek V4 Pro (max) [Q-1 fallback 单独承担] | **DEFERRED + skip → tester first** | deepseek-reviewer 可(异构宽松) | warning |
+221:6. **Codex + DeepSeek 都卡时 (Q-13 L2 fallback)**:进入 §0.6.2 ⑥ fallback chain L2 路径 — single agent shell default 出 plan,不审,标 warning + accept(主编排仍要 dispatch 但不强制异构,接受 plan)。
+267:| 首次 PLAN + Codex 卡死/无额度 (L1) | `[planner:deepseekV4pro]` (deepseek-planner, fable, max) [Q-1 fallback 单独承担] | **DEFERRED + skip + tester first** (§0.7.2) |
+269:| 返工 PLAN_PATCH + Codex 卡死 | `[planner:deepseekV4pro]` (沿用 L1 fallback) | **DEFERRED + skip + tester first** (§0.7.2) |
+EXIT: 0

@@ -1,0 +1,58 @@
+=== T2-3.3: Q-10 idle classifier ===
+336:│ ⑥ 主 session idle classifier (Q-10):                                  │
+337:│    - **空闲**(idle):无 in-flight sub-agent,无用户消息待处理 → 等用户│
+338:│    - **等待后台**(waiting_bg):有 background sub-agent 跑中 →         │
+340:│    - **等待用户**(waiting_user):sub-agent 报 AMBIGUITY_RAISED →       │
+342:│    - **blocked**(真无路可走):global_state=blocked,关键依赖全坏 →     │
+344:│    - **可推进**(actionable):有 user message + 当前 pipeline 可派     │
+684:### 0.11.4 idle classifier 主 session 状态枚举 (Q-10)
+690:| **空闲** (idle) | 无 in-flight sub-agent,无用户消息待处理 | 等用户消息,什么都不派 |
+691:| **等待后台** (waiting_bg) | 有 background sub-agent 跑中 | echo "[dispatch] 已派 <role> 在后台跑",释放回用户,**不阻塞主 turn** |
+692:| **等待用户** (waiting_user) | sub-agent 报 `AMBIGUITY_RAISED` / case B 追问 | echo 追问用户,**不派任何 sub-agent**,等用户回 |
+693:| **blocked** | global_state=blocked,真无路可走 | echo "任务 block,原因 X,需用户确认",仍 receptive |
+694:| **可推进** (actionable) | 有 user message + 当前 pipeline 可派下一步 | 立即派,不阻塞 |
+696:**触发条件 + 动作一一对应**,不要把"等待后台"误判成"可推进"而继续派新 sub-agent(违背 §0.8 ⑤)。
+741:**主编排者永远 receptive** (Q-9 不阻塞):`global_state` 几乎一直 = `active`。即使所有 pipeline 都处于 `暂停` 或 `已完成` 或 `等待 sub-agent 返回`,主编排者仍能接收用户输入。只有当真无路可走(Codex plan + DeepSeek reviewer 都不可用且无延期记录 / 网络断 / 关键依赖坏)时,`global_state` 才 = `blocked`,且即使 `blocked` 也能接收用户输入,只是无法自动推进。
+756:### 2.1 `blocked` 状态的进入与解除
+758:`global_state = blocked` 表示任务**暂停等待外部条件**。注意：per-pipeline `暂停` 是单条生产线暂停，全局 `blocked` 才是真无路可走。
+761:- **`global_state = blocked`**: 全局阻塞。主编排仍能接收用户输入并列出故障原因，但无法自动推进。只在真无路可走时进入。
+763:`blocked_reason` 字段移到 STATE.json top-level。
+765:进入条件（global_state 切到 blocked）：
+773:| 同一类别编译/测试反复失败 ≥ 3 次 | 不可稳定收敛 | 标 `blocked`, 提示降级方案或拆类别 |
+777:**进入 blocked 时的强制动作**：
+780:# 1. 把 global_state 标为 blocked
+781:# STATE.json top-level 加字段: blocked_reason, blocked_at
+784:# 4. 不得自行 unblock - 等待用户明确指令
+787:**解除 blocked 的强制动作**：
+791:# 2. 删除 STATE.json 的 blocked_reason
+798:- blocked 后继续推进任务（绕过 block 状态）
+799:- 修改 STATE.json 时不记录 blocked_reason
+830:主编排者仍能接收用户输入并响应。`global_state = blocked` 只在极少数情况下使用（DeepSeek planner 不可用或 Codex 审查额度不足且无延期记录 / 网络断 / 关键依赖坏），且即使 `blocked` 也能接收用户输入，只是无法自动推进。
+834:2. 如果 `global_state = blocked` → 先报告阻塞原因，再处理用户指令
+960:- `blocked`：主编排介入，判断是需求不清、调研不足、计划缺口还是模型能力不足。
+1016:blocked:
+1301:  "blocked_reason": null,
+1338:| `blocked` | 真无路可走 | 是，还能接收用户输入，但无法自动推进 |
+
+--- §0.11.4 主 session 状态枚举 ---
+| **空闲** (idle) | 无 in-flight sub-agent,无用户消息待处理 | 等用户消息,什么都不派 |
+| **等待后台** (waiting_bg) | 有 background sub-agent 跑中 | echo "[dispatch] 已派 <role> 在后台跑",释放回用户,**不阻塞主 turn** |
+| **等待用户** (waiting_user) | sub-agent 报 `AMBIGUITY_RAISED` / case B 追问 | echo 追问用户,**不派任何 sub-agent**,等用户回 |
+| **blocked** | global_state=blocked,真无路可走 | echo "任务 block,原因 X,需用户确认",仍 receptive |
+| **可推进** (actionable) | 有 user message + 当前 pipeline 可派下一步 | 立即派,不阻塞 |
+
+**触发条件 + 动作一一对应**,不要把"等待后台"误判成"可推进"而继续派新 sub-agent(违背 §0.8 ⑤)。
+
+### 0.11.5 命名规则段 (Q-11 — 长而清,禁缩写)
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│ 命名规则 — 全词或中文,禁缩写:                                          │
+│                                                                        │
+│ ① task_id 命名:<日期-主题-细节-动作> (全词,kebab-case):               │
+│    - 好例:skill-meta-flow-control-rules-extended-2026-07-10           │
+│    - 坏例:sm-fce-2610710 (缩写) ❌                                     │
+│    - 看名字能知道:日期 + 主题 + 动作范围 + pipeline 类别               │
+│                                                                        │
+│ ② category 命名:<category_id> = <模块名>:<子功能>:<修改类型>:        │
+│    - 好例:skill-core:q13:swap  /  auto-dev:dispatch:fallback          │

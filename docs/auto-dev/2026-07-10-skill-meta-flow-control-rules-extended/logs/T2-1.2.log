@@ -1,0 +1,28 @@
+=== T2-1.2: Q-2 返工分情况表 (4 行 + 500k 行) ===
+--- 4 行覆盖 grep ---
+171:| L1 Codex 卡 | DeepSeek V4 Pro (max) [Q-1 fallback 单独承担] | **DEFERRED + skip → tester first** | deepseek-reviewer 可(异构宽松) | warning |
+266:| 首次 PLAN + Codex 有额度 (L0) | `[planner:codex]` (Codex gpt-5.5 high) ← Q-13 swap | `[reviewer:deepseek]` (fable max) ← Q-13 swap |
+267:| 首次 PLAN + Codex 卡死/无额度 (L1) | `[planner:deepseekV4pro]` (deepseek-planner, fable, max) [Q-1 fallback 单独承担] | **DEFERRED + skip + tester first** (§0.7.2) |
+268:| 返工 PLAN_PATCH + Codex 有额度 | `[planner:codex]` (gpt-5.5 xhigh, Tier2 角色翻转 — 注意:Q-13 swap 后 Tier2 出 plan 也是 Codex xhigh) | `[reviewer:deepseek]` (fable max, 异构) |
+269:| 返工 PLAN_PATCH + Codex 卡死 | `[planner:deepseekV4pro]` (沿用 L1 fallback) | **DEFERRED + skip + tester first** (§0.7.2) |
+
+--- 500k 新行 (Q-13b) ---
+271:| DeepSeek 单轮 input ≥ 500k token (Q-13b) | **主编排判定拆新 pipeline**(避免 context 爆炸,不开新 PLAN_PATCH) | — |
+
+--- 返工周期表 4+1 行具体内容 (line 260-280) ---
+```
+
+**返工周期 (PLAN_PATCH) 分情况表**(Codex 状态决定角色,Q-13 swap 后):
+
+| 场景 | 出 plan 方 | 审 plan 方 |
+|---|---|---|
+| 首次 PLAN + Codex 有额度 (L0) | `[planner:codex]` (Codex gpt-5.5 high) ← Q-13 swap | `[reviewer:deepseek]` (fable max) ← Q-13 swap |
+| 首次 PLAN + Codex 卡死/无额度 (L1) | `[planner:deepseekV4pro]` (deepseek-planner, fable, max) [Q-1 fallback 单独承担] | **DEFERRED + skip + tester first** (§0.7.2) |
+| 返工 PLAN_PATCH + Codex 有额度 | `[planner:codex]` (gpt-5.5 xhigh, Tier2 角色翻转 — 注意:Q-13 swap 后 Tier2 出 plan 也是 Codex xhigh) | `[reviewer:deepseek]` (fable max, 异构) |
+| 返工 PLAN_PATCH + Codex 卡死 | `[planner:deepseekV4pro]` (沿用 L1 fallback) | **DEFERRED + skip + tester first** (§0.7.2) |
+| DeepSeek 单轮 input < 500k token (Q-13b) | 允许再来一轮返工(同 plan 上下文内继续) | 同上 |
+| DeepSeek 单轮 input ≥ 500k token (Q-13b) | **主编排判定拆新 pipeline**(避免 context 爆炸,不开新 PLAN_PATCH) | — |
+
+**返工 fail-type 分流表**(reviewer FAIL 后改 vs 重做的判定):
+
+| Fail type | 信号 | 返工目标 |

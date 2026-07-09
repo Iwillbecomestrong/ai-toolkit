@@ -1,0 +1,47 @@
+=== T2-1.4: Q-4 异构性自纠错 (4 字段 a/b/c/d) ===
+124:│      PLAN(丧失异构底线)。详 §0.6.2 ⑥ fallback chain。                │
+130:│   ⑤ 异构性自纠错(主编排发现自己或前序阶段已丧失异构性时):            │
+132:│         同一族模型,丧失异构底线,作废。                                │
+134:│         `planner.model != reviewer.model`。不等同即合法。              │
+135:│      c) 异构已破 → 立即回滚(回 planner 拿新 plan / 重新派真异构     │
+137:│      d) PLAN_REVIEW 工位异构底线 **严于** CODE_REVIEW 工位:           │
+138:│         PLAN_REVIEW 阶段严禁 deepseek 替 Codex (丧失异构底线),       │
+140:│         CODE_REVIEW 阶段 deepseek-reviewer 可接受(异构底线宽松),    │
+148:│        阶段直接 tester first;DeepSeek 单独出 + 审 plan (异构底线     │
+164:> **异构底线不变**:Tier1 与 Tier2 各自内 "出 plan 方 ≠ 审 plan 方" 仍然成立,只是 swap 了谁出谁审。Q-13 swap 不会破坏异构底线。
+220:5. **Codex 无额度时 (Q-1 fallback)**:`DEFERRED_CODEX_REVIEW.md` + `reviewer_status=deferred_due_to_codex_unavailable`,**严禁** 假装降级到 deepseek-reviewer 审 deepseek-planner (丧失异构底线)。正确路径见 §0.7.2 7 步路径(DEFERRED → tester first → developer → tester → reviewer [code review 异构底线宽松] → ACCEPTANCE)。
+231:| `DEFERRED_due_to_codex_unavailable` | Codex 卡死 / 无额度,已写 `DEFERRED_CODEX_REVIEW.md` | 跳过 PLAN_REVIEW 阶段,直接派 `[tester:minimax]` 写 TEST_TARGET.md (TDD 头) → developer → tester → reviewer (异构底线对 code review 工位宽松,codex / deepseek-reviewer 都可以) → ACCEPTANCE |
+239:Codex CLI 卡死 (exit -1,启动崩溃) 或 无额度 时,**严禁** 降级到 deepseek-reviewer 假装异构(那是同一族模型失去异构底线)。正确路径:
+251:   - 异构底线对 code review 工位宽松,deepseek-reviewer 可用,但**plan review 工位不能**
+257:6. reviewer 审 diff (deepseek-reviewer Tier1 / Codex Tier2 都可,异构底线对 code review 阶段宽松)
+290:**异构性自纠错**:主编排如发现 CODE_REVIEW 工位已被错误派成 deepseek-reviewer 审 deepseek-planner 的 plan (丧失异构性),**必须回滚**,重新派真异构 reviewer (Codex) 或按 DEFERRED + skip 路径走。code review 工位异构底线**宽于** plan review 工位,所以同族 review 在 CODE_REVIEW 阶段可接受,但 PLAN_REVIEW 阶段绝不可。
+948:- **Codex**：同一条产线里 plan 审查 / Tier2 planner / code 审查复用**同一个 Codex 会话**（读的文件大同小异，累积缓存）。寿命 ≤250k；超 250k 重开，或**神志不清**（答非所问、逻辑崩、反复忽略证据）立即换。异构底线不变：Codex 的 Tier2 计划由 DeepSeek 审，Codex 不审自己写的计划。
+
+--- §0.6.2 ⑤ 异构底线 4 字段 ---
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  reviewer 必派(异构关键路径):                                          │
+│   ① reviewer 是责任身份,不是可选增强。                               │
+│      哪怕用户在催,也必须先派 reviewer 拿到 APPROVE 才能宣告完成。     │
+│                                                                        │
+│   ② 默认走 [reviewer:codex] / Q-13 改版后 plan-review 切 [reviewer:deepseek]:│
+│      Bash 调 pwsh -File dispatch.ps1 -Action codex-review -Effort high│
+│      真实模型 gpt-5.5 (Codex CLI 内部)                                 │
+│      Q-13 swap:plan review 默认走 [reviewer:deepseek] (fable max),    │
+│      code review 仍走 [reviewer:codex] (gpt-5.5 high)。                │
+│                                                                        │
+│   ③ Codex 无额度时(Q-1 fallback):写 DEFERRED_CODEX_REVIEW.md,        │
+│      reviewer_status=deferred_due_to_codex_unavailable,跳 PLAN_REVIEW │
+│      阶段直接 tester first (见 §0.7.2)。严禁降级 deepseek 替 Codex 审  │
+│      PLAN(丧失异构底线)。详 §0.6.2 ⑥ fallback chain。                │
+│                                                                        │
+│   ④ reviewer 失败/changes_required:                                   │
+│      不自动修。把 review 报告回传 developer,由 developer 改,         │
+│      然后同一 reviewer 复审,反复到 APPROVE 才进 ACCEPTANCE。         │
+│                                                                        │
+│   ⑤ 异构性自纠错(主编排发现自己或前序阶段已丧失异构性时):            │
+│      a) 案例:deepseek-reviewer 审 deepseek-planner 出的 PLAN —        │
+│         同一族模型,丧失异构底线,作废。                                │
+│      b) 主编排当下 turn self-check:派 reviewer 前确认                │
+│         `planner.model != reviewer.model`。不等同即合法。              │
+│      c) 异构已破 → 立即回滚(回 planner 拿新 plan / 重新派真异构     │
