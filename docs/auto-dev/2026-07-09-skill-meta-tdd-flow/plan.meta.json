@@ -1,0 +1,60 @@
+{
+  "task_id": "skill-meta-tdd-flow-2026-07-09",
+  "created_by": "deepseek-v4-pro-planner",
+  "created_at": "2026-07-09T09:00:00Z",
+  "plan_status": "pending",
+  "scope": "skill-meta-ai-toolkit-skills-self",
+  "files_in_scope": [
+    "ai-toolkit/skills/_shared/SKILL_CORE.md",
+    "ai-toolkit/skills/_shared/scripts/auto_dev_guard.py",
+    "ai-toolkit/skills/_shared/scripts/dispatch.ps1",
+    "ai-toolkit/skills/_shared/hooks.claude.json",
+    "ai-toolkit/skills/auto-dev/agents/claude-developer.md",
+    "ai-toolkit/skills/auto-dev/agents/claude-tester.md",
+    "ai-toolkit/skills/auto-dev/agents/claude-researcher.md",
+    "ai-toolkit/skills/auto-code-android-dev/scripts/_codex-runtime.ps1",
+    "ai-toolkit/skills/auto-code-android-dev/scripts/run-codex-plan.ps1",
+    "ai-toolkit/skills/auto-code-android-dev/scripts/run-codex-review.ps1",
+    "ai-toolkit/skills/auto-code-android-dev/scripts/run-codex-implement.ps1",
+    "ai-toolkit/skills/auto-code-android-dev/SKILL.md",
+    "ai-toolkit/skills/_shared/scripts/show_session_context.py",
+    "ai-toolkit/skills/_shared/templates/PLAN_AGENT_SELECTION.md",
+    "ai-toolkit/skills/_shared/templates/MODEL_QUOTA_CHECK.md.template",
+    "ai-toolkit/skills/_shared/WORKFLOW.md"
+  ],
+  "categories": {
+    "CAT-1": {
+      "title": "核心门禁补完(auto_dev_guard.py + hooks.claude.json + SKILL_CORE.md §5.2清理)",
+      "priority": "P0",
+      "steps": ["S1.1", "S1.2", "S1.3", "S1.4", "S1.5", "S1.6"],
+      "depends_on": []
+    },
+    "CAT-2": {
+      "title": "gpt-5.4 → gpt-5.5 全局替换 + 语义变更",
+      "priority": "P1",
+      "steps": ["S2.1", "S2.2", "S2.3", "S2.4", "S2.5", "S2.6", "S2.7", "S2.8"],
+      "depends_on": ["CAT-1"]
+    },
+    "CAT-3": {
+      "title": "auto-code-android-dev SKILL.md 路径约定 + 清理",
+      "priority": "P2",
+      "steps": ["S3.1", "S3.2"],
+      "depends_on": []
+    },
+    "CAT-4": {
+      "title": "show_session_context.py model/effort 字段补全",
+      "priority": "P2",
+      "steps": ["S4.1", "S4.2"],
+      "depends_on": []
+    },
+    "CAT-5": {
+      "title": "集成验证 + 一致性审计",
+      "priority": "P3",
+      "steps": ["S5.1", "S5.2", "S5.3", "S5.4", "S5.5", "S5.6", "S5.7", "S5.8"],
+      "depends_on": ["CAT-1", "CAT-2", "CAT-3", "CAT-4"]
+    }
+  },
+  "acceptance_criteria_count": 12,
+  "verification_command": "pwsh -File G:\\ai-toolkit\\install-all.ps1 -Framework claude; pwsh -File G:\\ai-toolkit\\skills\\auto-dev\\scripts\\install-agents.ps1",
+  "fallback": "blocked_if_planner_unavailable"
+}
