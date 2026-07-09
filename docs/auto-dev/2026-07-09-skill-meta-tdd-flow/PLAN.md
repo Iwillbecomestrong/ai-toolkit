@@ -193,7 +193,7 @@ CAT-1 (auto_dev_guard.py + hooks.claude.json + SKILL_CORE.md §5.2 清理)
 | S2.5 | `WORKFLOW.md`: 所有 gpt-5.4→gpt-5.5 替换; `CATEGORY_LOOP` 中 "CATEGORY_PLAN_REVIEW ← 审一次:首次交付 gpt-5.4,返工周期 gpt-5.5" → "审一次:统一 gpt-5.5,effort 分层 high(首次)/xhigh(返工)"; 全部 "GPT-5.4"→"GPT-5.5" 并调整周边语义 | developer | `WORKFLOW.md` | — |
 | S2.6 | `PLAN_AGENT_SELECTION.md`: JSON 示例 `"first_review_model": "gpt-5.4"` → `"gpt-5.5"`; 删除旧的 sonnet/opus 派单参考 | developer | `PLAN_AGENT_SELECTION.md` | — |
 | S2.7 | `MODEL_QUOTA_CHECK.md.template`: 所有 gpt-5.4→gpt-5.5; 派单可用模型列表 developer/tester/researcher 行: sonnet/opus/haiku → minimax; 加注释 "本环境 minimax 为唯一可用 Claude shell 模型; fable→deepseek-v4-pro 为深层推理; sonnet/opus/haiku 不可用" | developer | `MODEL_QUOTA_CHECK.md.template` | — |
-| S2.8 | `SKILL_CORE.md` 残留 gpt-5.4 引用 → gpt-5.5(§3 钩子表 line 281 / §5.1 line 348 / §5.2 lines 530-577); 语义更新为 "统一 gpt-5.5 + effort 分层" | developer | `SKILL_CORE.md` | S1.6 |
+| S2.8 | `SKILL_CORE.md` 残留 gpt-5.4 引用 → gpt-5.5(§3 钩子表 line 281 / §5.1 line 348 / §5.2 lines 530-577); 语义更新为 "统一 gpt-5.5 + effort 分层" | developer | `SKILL_CORE.md` | **S1.6 (强制前置,PLAN_REVIEW N2)** — 与 S1.6 同文件,必须先做 S1.6 的 §5.2 旧模型名清理 |
 
 ### CAT-3: auto-code-android-dev SKILL.md
 
