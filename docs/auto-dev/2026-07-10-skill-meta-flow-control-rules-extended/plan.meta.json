@@ -1,0 +1,128 @@
+{
+  "task_id": "skill-meta-flow-control-rules-extended-2026-07-10",
+  "created_by": "codex-gpt-5.5-via-codex-run-codex-plan-runner (真成功, wrapper status=failed 是 bug)",
+  "created_at": "2026-07-10T01:55:43+08:00",
+  "plan_status": "pending",
+  "scope": "skill-meta-flow-control-rules-extended",
+  "files_in_scope": [
+    "ai-toolkit/skills/_shared/SKILL_CORE.md",
+    "ai-toolkit/skills/_shared/MODEL_ROUTING.md",
+    "ai-toolkit/skills/_shared/WORKFLOW.md",
+    "ai-toolkit/skills/auto-dev/SKILL.md"
+  ],
+  "categories": {
+    "CAT-0": {
+      "title": "PLAN 产物 (本轮出 PLAN.md + plan.meta.json + 异构 plan reviewer 跑)",
+      "priority": "P0",
+      "steps": ["S0: 沉淀目录 + PLAN.md 落地 + plan.meta.json 一致 + PLAN_REVIEW 异构审"]
+    },
+    "CAT-1": {
+      "title": "MODEL_ROUTING swap + DEFERRED/fallback (Q-13 + Q-1/Q-2/Q-3/Q-4)",
+      "priority": "P0",
+      "steps": [
+        "S1: §0.6.2 主路由 swap: Tier1 PLAN→Codex, PLAN_REVIEW→DeepSeek, CODE_REVIEW→Codex",
+        "S2: §0.7 第一轮流程描述 swap (步骤1 planner=Codex, 步骤2 reviewer=DeepSeek)",
+        "S3: §0.7.1 PLAN_REVIEW 三态枚举 (Q-3)",
+        "S4: §0.7.2 返工分情况表 swap (含 Q-2 + Q-13b 500k threshold 行)",
+        "S5: §0.6.2 ⑤ 异构性自纠错 (Q-4)",
+        "S6: 新增 §0.6.2 ⑥ fallback chain L0/L1/L2 (Q-13 fallback)",
+        "S7: MODEL_ROUTING.md Tier1/Tier2 表全 sync (Q-13)"
+      ],
+      "depends_on": []
+    },
+    "CAT-2": {
+      "title": "session 复用 + token threshold + report (Q-13a + Q-13b + Q-13c)",
+      "priority": "P0",
+      "steps": [
+        "S8: §0.10.7 新增 session 复用规则 sub_session_id=<pipeline_id> (Q-13a)",
+        "S9: §0.10.8 新增 batch-end token 报告规则 (Q-13c)",
+        "S10: WORKFLOW.md dispatch 段加 sub_session_id 字段 (Q-13a 落地)"
+      ],
+      "depends_on": ["CAT-1"]
+    },
+    "CAT-3": {
+      "title": "用户插话 / 判定类 (Q-5/Q-6/Q-7/Q-12)",
+      "priority": "P1",
+      "steps": [
+        "S11: §0.10 ⑤ INTERRUPT_AND_RE_PLAN + ⑥ DETECT_CONTRADICTION (Q-5)",
+        "S12: §0.11 case A 主编排自判 / case B 主编排代 sub-agent 问 (Q-6)",
+        "S13: §0.11 USER_NEEDS_DIGEST.md 协议段 (Q-7)",
+        "S14: §0.10 ⑥ 判定算法改集合论 O(N) file overlap (Q-12)"
+      ],
+      "depends_on": ["CAT-1"]
+    },
+    "CAT-4": {
+      "title": "主 session receptive + idle classifier (Q-8/Q-9/Q-10)",
+      "priority": "P1",
+      "steps": [
+        "S15: §0.9 + §0.10 流水线并行/串行柔性化 (Q-8)",
+        "S16: §0.6.1 + §0.8 + §0.11 主编排疏漏接受 + 不阻塞 (Q-9)",
+        "S17: §0.8 + §0.11 idle classifier (Q-10)"
+      ],
+      "depends_on": ["CAT-3"]
+    },
+    "CAT-5": {
+      "title": "命名规则 + 跨文件 sync (Q-11)",
+      "priority": "P2",
+      "steps": [
+        "S18: §0.11 加'命名规则段' + 正反例 (Q-11)",
+        "S19: auto-dev/SKILL.md 加命名规则引用 (Q-11 跨文件)",
+        "S20: WORKFLOW.md CATEGORY_DISCOVERY 加命名约束 (Q-11 跨文件)",
+        "S21: 标注: 老 pipeline 目录不回改 (Q-11 caveat)"
+      ],
+      "depends_on": ["CAT-1"]
+    },
+    "CAT-6": {
+      "title": "集成验证 + 一致性审计",
+      "priority": "P3",
+      "steps": [
+        "S22: 全文件 grep 旧 Tier1/Tier2 引用 + gpt-5.4 残留",
+        "S23: §0.6.2 / §0.7 / MODEL_ROUTING.md 交叉校验",
+        "S24: 实施报告模板要求 (Q-13c token report 末尾段)",
+        "S25: 全量回归测试跑通"
+      ],
+      "depends_on": ["CAT-1", "CAT-2", "CAT-3", "CAT-4", "CAT-5"]
+    }
+  },
+  "q13_decisions": {
+    "C-1": "session_id_reuse_per_subagent",
+    "C-2": "alpha_ideal_L0_plus_L1_q1_fallback_plus_L2_single_tier",
+    "C-3": "primary_round_pass_rate_up_no_full_round_trip_skip",
+    "C-4": "extend_current_pipeline_no_new_pipeline"
+  },
+  "risk_level": "HIGH",
+  "risk_notes": [
+    "R1[HIGH]: §0.6.2 MODEL_ROUTING swap 全局高风险 — 全文旧角色引用需全部更新，遗漏一处即角色错配",
+    "R2[HIGH]: Q-13a session 复用要求 dispatch 实现 sub_session_id 回填 — 已在 _codex-runtime.ps1 §257 实现，但 wrapper 中 resume <id> 用法有 bug 待修",
+    "R3[HIGH]: L1 fallback 异构底线放宽 (deepseek 自审) — 仅 Codex 不可用时接受; 现 Codex 实际成功可走 L0",
+    "R4[MEDIUM]: Q-13b 500k threshold 对 DeepSeek (典型 200k context) 可能永远不触发 — 实际阈值以 MODEL_ROUTING.md 上下文阈值表为准",
+    "R5[MEDIUM]: Q-11 老 pipeline 已 commit 不回改 — 新旧命名可能不一致",
+    "R6[LOW]: Q-13c token 报告依赖 show_session_context.py — 若 litellm 不返回 token_usage 则报告为空",
+    "R7[LOW]: sub-agent protocol 强化需 auto_dev_guard.py 改 — 但本批不动 guard 文件 (留待下批)"
+  ],
+  "acceptance_criteria_count": 17,
+  "verification_command": "pwsh -File G:\\ai-toolkit\\install-all.ps1 -Framework claude; pwsh -File G:\\ai-toolkit\\skills\\auto-dev\\scripts\\install-agents.ps1",
+  "fallback": "blocked_if_planner_unavailable",
+  "codex_status": "actually_success_wrapper_status_wrong",
+  "codex_fail_evidence_corrected": [
+    "codex-review-20260709-230305: exit_code=-1 status=failed (上一批, 含同样 resume 语法 bug)",
+    "codex-plan probe b00dy16x4: dispatch param mismatch (不是我派错, 是 -ProblemStatement 不被 plan runner 接受)",
+    "codex-plan-20260710-015543: exit_code=-1 但 stdout_bytes=12024 实际写出 PLAN.md 完整内容 (resume <id> 语法 bug 导致 wrapper 误报 fail)"
+  ],
+  "session_id_strategy": "per_pipeline_one_sub_session_id_all_subagents_share",
+  "sub_session_id": "skill-meta-flow-control-rules-extended-2026-07-10",
+  "token_budget_threshold_deepseek": 500000,
+  "l0_ideal_actual_ran": {
+    "tier1_plan": "Codex gpt-5.5 (high) — RAN, output successful",
+    "tier1_plan_review": "DeepSeek V4 Pro (fable, max) — TO RUN next",
+    "tier1_code_review": "Codex gpt-5.5 (high) — RUN after developer + tester",
+    "tier2_plan": "DeepSeek V4 Pro (fable, max)",
+    "tier2_plan_review": "Codex gpt-5.5 (xhigh)",
+    "tier2_code_review": "DeepSeek V4 Pro (fable, max)"
+  },
+  "next_agent": "reviewer:deepseekV4pro (异构审 PLAN.md)",
+  "pipeline_type": "single_cluster_chain_after",
+  "cluster_count": 1,
+  "total_q_count": 13,
+  "total_steps": 25
+}
