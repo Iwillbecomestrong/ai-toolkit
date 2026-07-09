@@ -54,6 +54,12 @@
       "depends_on": ["CAT-1", "CAT-2", "CAT-3", "CAT-4"]
     }
   },
+  "risk_level": "HIGH",
+  "risk_notes": [
+    "1 HIGH + 2 MEDIUM + 2 LOW per plan §8",
+    "handle_stop block 变更可能阻止用户正常退出 Claude Code (PLAN §8 风险表)",
+    "Codex Tier1 异构审查目前 exit -1 → DEFERRED + tester first 路径"
+  ],
   "acceptance_criteria_count": 12,
   "verification_command": "pwsh -File G:\\ai-toolkit\\install-all.ps1 -Framework claude; pwsh -File G:\\ai-toolkit\\skills\\auto-dev\\scripts\\install-agents.ps1",
   "fallback": "blocked_if_planner_unavailable"
