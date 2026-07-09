@@ -44,10 +44,10 @@ G:\ai-toolkit\                       【主仓 root】 跟踪 scripts/记忆
 │  ├─ workflow-router/                (子仓直管)
 │  └─ _shared/                        (子仓直管)
 └─ agent-memory/                      【子仓 ①】 (submodule)
+   ├─ 00_inbox/
    ├─ 01_globel.md
-   ├─ 02_topics/
    ├─ 03_agents/
-   └─ 00_inbox/
+   └─ 04_distilled/                   (distill-memory.ps1 输出)
 ```
 
 **3 层 git 实体**:
@@ -203,7 +203,7 @@ Write-Host "✓ submodule 两层就绪"
 |---|---|---|
 | `install-all.ps1` | 无需改动 | 现有逻辑是 `Get-ChildItem skills/*/SKILL.md`,submodule 模式下文件物理位置不变 |
 | `manifest.json` | 无需改动 | `skills_src: "skills"` 仍指向同一物理路径 |
-| `distill-memory.ps1` | 路径调整 | 旧版 ignore `agent-memory/distilled/`,新版读 `agent-memory/02_distilled/`(已部分使用,需确认) |
+| `distill-memory.ps1` | 路径调整 | 输出路径 `agent-memory/04_distilled/<x>.md`(已实际使用);`.gitignore` 已忽略该目录 |
 | `README.md` | **需更新** | 加 submodule init/update 步骤,加"如何提交流程" |
 | `projects.md` | **需更新** | 更新"仓库"段落,Phase 2 加迁移项 |
 | `.gitignore` | **需更新** | 加 `.git-remotes/`(裸仓中转) |
@@ -244,7 +244,7 @@ Write-Host "✓ submodule 两层就绪"
 **Step 7**:PC#2 验证
 - 在 PC#2 删除 `G:\ai-toolkit\` 重新同步
 - 跑 `init-submodules.ps1` + `install-all.ps1`
-- 确认 `/skills` 列出 10 个 skill,`agent-memory/` 内容正确
+- 确认 `/skills` 列出全部 9 个 skill(`_shared/` 不算 skill),`agent-memory/` 内容正确
 
 ---
 
@@ -254,7 +254,7 @@ Write-Host "✓ submodule 两层就绪"
 |---|---|---|---|
 | Syncthing 同步 `.git/` 内容导致 PC#2 仓库损坏 | 高 | `.stignore` 加 `(?d).git/` 和 `(?d).git-remotes/` | PC#2 重新同步 |
 | 嵌套 submodule + 双层 .gitmodules 易出错 | 中 | `bump-skill.ps1` / `init-submodules.ps1` 收口操作;README 写明顺序 | 重新跑脚本 |
-| PC#1 误在主仓直接 `git add skills/<name>/...` | 中 | 主仓 .gitignore 加 `skills/<name>/` 白名单例外 | `git rm --cached` 还原 |
+| PC#1 误在主仓直接 `git add skills/<name>/...` | 中 | 加 pre-commit hook 检查 `git diff --cached` 不含 `skills/<name>/` 文件内容(submodule 引用不受 .gitignore 约束) | `git rm --cached` 还原 |
 | agent-memory 移动后历史丢失 | 低 | 迁移前 `git log --all` 备份关键 commit SHA 到 `CHANGELOG.md` | 主仓 `git rm agent-memory` + 还原旧结构 |
 | `install-all.ps1` 在 PC#2 跑时找不到 SKILL.md | 中 | `init-submodules.ps1` 是 `install-all.ps1` 的前置检查 | `git submodule update --init --recursive` 后重跑 |
 
@@ -267,8 +267,8 @@ Write-Host "✓ submodule 两层就绪"
 - [ ] `G:\ai-toolkit\git submodule status` 显示 2 个 submodule,均无 `(broken)` 标记
 - [ ] `G:\ai-toolkit\skills\git submodule status` 显示 3 个 sub-submodule
 - [ ] 3 个子子仓各有 `CHANGELOG.md` 和至少一个 SemVer tag
-- [ ] 跑 `install-all.ps1` 后,`/skills` 列出全部 10 个 skill
-- [ ] `distill-memory.ps1` 仍能生成 `agent-memory/02_distilled/<x>.md`
+- [ ] 跑 `install-all.ps1` 后,`/skills` 列出全部 9 个 skill(`_shared/` 不算 skill)
+- [ ] `distill-memory.ps1` 仍能生成 `agent-memory/04_distilled/<x>.md`
 - [ ] PC#2 跑 `init-submodules.ps1` 一键完成两层 init
 - [ ] `.stignore` 包含 `(?d).git/` 和 `(?d).git-remotes/`
 - [ ] PC#2 `git status` 干净,不报 `modified content` / `untracked` 错误
