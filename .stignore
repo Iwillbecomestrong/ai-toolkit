@@ -6,3 +6,6 @@
 (?i)desktop.ini
 (?i).DS_Store
 (?d).stignore.syncthing*
+
+# Submodule bare repos must NOT sync (would corrupt)
+(?d).git-remotes/

@@ -16,3 +16,6 @@ __pycache__/
 
 # Skill change worktrees (per using-git-worktrees skill)
 .worktrees/
+
+# Submodule bare repo stash (PC#1 only, syncthing excluded)
+.git-remotes/
