@@ -18,7 +18,7 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('autocontents-skill', 'mdtolatex', 'md-to-docx')]
+    [ValidateSet('autocontents-skill', 'mdtolatex', 'md-to-docx', 'fix-critical-bug')]
     [string]$Skill,
 
     [ValidateSet('major', 'minor', 'patch')]

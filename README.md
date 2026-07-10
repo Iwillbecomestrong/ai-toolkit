@@ -101,7 +101,7 @@ powershell -ExecutionPolicy Bypass -File .\init-submodules.ps1
 主仓拆为嵌套结构:
 - **主仓** = scripts + 4 个项目记忆 + `.gitmodules`
 - **2 个 submodule**: `skills/` 整体 + `agent-memory/`
-- **3 个 sub-submodule** (在 `skills/` 内): `autocontents-skill` / `mdtolatex` / `md-to-docx` 各自独立 SemVer + CHANGELOG
+- **4 个 sub-submodule** (在 `skills/` 内): `autocontents-skill` / `mdtolatex` / `md-to-docx` / `fix-critical-bug` 各自独立 SemVer + CHANGELOG
 - **6 个 skill 在 skills/ 子仓直管**: `auto-dev` / `auto-code-android-dev` / `auto-dev-check` / `auto-dev-resume` / `chatgpt-input-output` / `workflow-router`(加 `_shared/`)
 
 **改子子仓后的提交流程**:
