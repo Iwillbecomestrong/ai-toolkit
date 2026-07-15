@@ -110,7 +110,7 @@ function Copy-SkillTree {
     param([string]$SourceDir, [string]$DestinationDir)
     if ($DryRun) { return }
     New-Item -ItemType Directory -Path $DestinationDir -Force | Out-Null
-    Copy-Item -Path (Join-Path $SourceDir '*') -Destination $DestinationDir -Recurse -Force
+    Copy-Item -Path (Join-Path $SourceDir '*') -Destination $DestinationDir -Recurse -Force -Exclude '.git','.gitmodules','install.log'
 }
 
 # Collect all skills from the requested tiers, deduped by name (skills/ wins).
@@ -129,6 +129,14 @@ function Get-SkillSources {
         Get-ChildItem -LiteralPath $tier.Path -Directory -ErrorAction SilentlyContinue | ForEach-Object {
             # Skip shared directories (prefixed with _) — these are skill dependencies
             if ($_.Name.StartsWith('_')) { return }
+            # Skip dot-prefixed dirs (hidden / runtime / git worktrees — not skills, would pollute dst)
+            if ($_.Name.StartsWith('.')) { return }
+            # Skip brace-prefixed dirs (template placeholders like {PROJECT_DIR})
+            if ($_.Name.StartsWith('{')) { return }
+            # Skip package directories containing Install.ps1 (e.g. evolving-used-skills-package, superpowers-*-overlay-v*)
+            if (Test-Path -LiteralPath (Join-Path $_.FullName 'Install.ps1')) { return }
+            # Skip bundle/package dirs (contain BUNDLE-* or README.md but no SKILL.md at root)
+            if (-not (Test-Path -LiteralPath (Join-Path $_.FullName 'SKILL.md'))) { return }
             # -OnlyArchived: keep only the named skill, and only from archived tier
             if ($OnlyArchived) {
                 if ($_.Name -ne $OnlyArchived) { return }
