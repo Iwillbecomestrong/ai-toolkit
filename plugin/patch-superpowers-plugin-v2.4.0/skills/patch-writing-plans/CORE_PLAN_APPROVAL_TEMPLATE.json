@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "approval_id": "",
+  "core_plan_path": "CORE_PLAN.md",
+  "core_plan_sha256": "",
+  "core_plan_version": 1,
+  "challenge_report_path": "CORE_PLAN_CHALLENGE_REPORT.md",
+  "challenge_report_sha256": "",
+  "challenge_status": "PASS",
+  "user_decision": "PENDING",
+  "approved_by": "user",
+  "approved_at": "",
+  "notes": ""
+}

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "patch-superpowers",
+  "displayName": "Patch Superpowers",
+  "version": "2.4.0",
+  "description": "中文两阶段规划与证据门禁的多 Agent 软件开发插件：Sol 规划、Claude 实现与计划对抗、Luna 审查。",
+  "license": "MIT",
+  "keywords": [
+    "software-development",
+    "multi-agent",
+    "planning",
+    "review",
+    "dag",
+    "tdd"
+  ],
+  "defaultEnabled": true
+}

@@ -1,0 +1,100 @@
+{
+  "schema_version": 18,
+  "plugin_version": "2.4.0",
+  "language": "zh-CN",
+  "codex_cli_roles": {
+    "core_planner": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "sandbox": "read-only",
+      "new_session": true,
+      "prompt": "skills/patch-writing-plans/SOL_CORE_PLANNER_PROMPT.md"
+    },
+    "detailed_planner": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "sandbox": "read-only",
+      "new_session": false,
+      "resume_core_planner_session": true,
+      "prompt": "skills/patch-writing-plans/SOL_DETAILED_PLANNER_PROMPT.md"
+    },
+    "repair_planner": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "sandbox": "read-only",
+      "new_session": true
+    },
+    "plan_patch": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "sandbox": "read-only",
+      "new_session": false,
+      "resume_planner_session": true
+    },
+    "architecture_reviewer": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "high",
+      "sandbox": "read-only",
+      "new_session": true
+    },
+    "task_reviewer": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "medium",
+      "sandbox": "read-only",
+      "new_session_for_initial_review": true,
+      "resume_same_session_for_rereview": true,
+      "prompt": "skills/patch-dag-worktree-development/CODEX_LUNA_TASK_REVIEW_PROMPT.md"
+    },
+    "integration_reviewer": {
+      "model": "gpt-5.6-luna",
+      "reasoning_effort": "medium",
+      "sandbox": "read-only",
+      "new_session_for_initial_review": true,
+      "resume_same_session_for_rereview": true,
+      "prompt": "skills/patch-dag-worktree-development/CODEX_LUNA_INTEGRATION_REVIEW_PROMPT.md"
+    },
+    "final_auditor": {
+      "model": "gpt-5.6-sol",
+      "reasoning_effort": "medium",
+      "sandbox": "read-only",
+      "new_session": true,
+      "resume_same_session_for_closure": true
+    }
+  },
+  "claude_agents": [
+    "patch-investigator",
+    "patch-plan-challenger",
+    "patch-tdd-implementer",
+    "patch-integration-operator"
+  ],
+  "planning": {
+    "two_stage": true,
+    "input_classification_required": true,
+    "must_follow_read_required": true,
+    "deferred_reference_access": true,
+    "unverified_reference_forbidden_in_plan": true,
+    "core_plan_user_approval_required": true,
+    "detailed_plan_requires_core_approval": true,
+    "detailed_plan_may_not_change_core": true,
+    "authority_change_user_approval_required": true,
+    "plan_challenger_backend": "claude_agent",
+    "plan_challenger_agent": "patch-plan-challenger",
+    "max_sol_revisions_per_stage": 2
+  },
+  "capacity": {
+    "claude_work_pool": 5,
+    "luna_review_pool": 5,
+    "heavy_build_slots": 2,
+    "android_device_slots": 1
+  },
+  "task_sizing": {
+    "before_running_only": true,
+    "runtime_long_tail_split": false
+  },
+  "protected_dev_admission": {
+    "serialized": true,
+    "replay_on_latest_dev": true,
+    "fresh_verification": true,
+    "rollback_required": true
+  }
+}
